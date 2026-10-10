@@ -6,7 +6,7 @@ from openai import RateLimitError
 
 
 
-def parse_response(resp, latency_ms):
+def parse_response(resp, latency_ms, retries=0):
     msg = resp.choices[0].message
 
     calls = []
@@ -31,7 +31,11 @@ def parse_response(resp, latency_ms):
         reasoning_tokens=u.total_tokens - u.prompt_tokens - u.completion_tokens,
     )
 
-    return ModelReply(text=msg.content or "", tool_calls=calls, usage=usage, latency_ms=latency_ms)
+    # "length" means the reply was cut off by max_tokens: worth seeing in the trace
+    finish_reason = getattr(resp.choices[0], "finish_reason", None)
+
+    return ModelReply(text=msg.content or "", tool_calls=calls, usage=usage, latency_ms=latency_ms,
+                      finish_reason=finish_reason, retries=retries)
 
 
 class OpenAICompatClient(ModelClient):
@@ -64,4 +68,4 @@ class OpenAICompatClient(ModelClient):
 
         latency_ms = (time.perf_counter() - start) * 1000
         self.last_call_end = time.time()
-        return parse_response(resp, latency_ms)
+        return parse_response(resp, latency_ms, retries=attempt)
