@@ -2,6 +2,7 @@ import json, os, tempfile, unittest
 from src.env import IncidentEnv
 from src.fake_model import FakeModel, call, bad_call, scripted
 from src.harness import run_episode, print_trajectory, save_trajectory, NUDGE
+from src.contracts import *
 
 BASE = {"arrivals": 900, "capacity": 500, "base_delay": 20}
 BROWNOUT = {**BASE, "id": "brownout_B", "degraded": {"B": 0.5}}
@@ -59,6 +60,20 @@ class TestHarness(unittest.TestCase):
                 data = json.load(f)
         print("\nsaved keys:", list(data))
         self.assertEqual(data["ended_by"], "submit")
+    
+    def test_extra_content_sent_back(self):
+        sig = {"google": {"thought_signature": "abc"}}
+        model = FakeModel([scripted(ToolCall("c1", "get_metrics", {"zone": "A"}, '{"zone": "A"}', sig)),
+                           scripted(call("c2", "submit", {}))])
+        run_episode(IncidentEnv(), CONTROL, model)
+
+        assistant = None
+        for m in model.seen[1]:
+            if m["role"] == "assistant":
+                assistant = m
+        print()
+        print(assistant["tool_calls"][0])
+        self.assertEqual(assistant["tool_calls"][0]["extra_content"], sig)
 
 if __name__ == "__main__":
     unittest.main()
