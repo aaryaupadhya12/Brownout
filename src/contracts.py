@@ -3,7 +3,7 @@ from typing import Optional
 
 
 
-VERSIONS = {"harness": "0.1.0", "env": "0.1.0", "grader": "0.2.0"}
+VERSIONS = {"harness": "0.2.0", "env": "0.1.0", "grader": "0.2.0"}
 
 @dataclass
 class TaskSpec:
@@ -40,6 +40,8 @@ class ModelReply:
     usage: Usage
     latency_ms: float
     logprobs: Optional[list] = None
+    finish_reason: Optional[str] = None   # "stop" | "tool_calls" | "length" (cut off) | None if unknown
+    retries: int = 0                      # how many times the client retried before this reply
 
 
 class ModelClient:
@@ -49,9 +51,32 @@ class ModelClient:
 
 @dataclass
 class GraderOutput:
-    reward: float 
-    signals: dict  # slo_ok , cost_ok , no_collatoral , diagnosed_zone 
+    reward: float
+    signals: dict  # metrics: recorded, never added into the reward
     grader_version: str
+    rewards: dict = field(default_factory=dict)   # name -> {"score": s, "weight": w}; reward = sum(s * w)
+    ok: bool = True                               # False if a scorer raised: exclude from averages, don't count as 0
+    grader_name: str = ""
+
+
+# One record per model call, so a slow, cut-off or retried call is visible on its own
+@dataclass
+class ModelCall:
+    turn: int
+    latency_ms: float
+    usage: Usage
+    finish_reason: Optional[str]
+    n_tool_calls: int
+    retries: int = 0
+
+
+# Where an error happened: "model" (provider/client), "env" (tool code),
+# "scorer" (grading code) or "harness" (this loop)
+@dataclass
+class ErrorRecord:
+    where: str
+    type: str
+    message: str
 
 @dataclass
 class Step:
@@ -76,6 +101,14 @@ class Trajectory:
     totals: dict = field(default_factory=dict)
     context_policy: dict = field(default_factory=dict)   # {"name": "identity", "version": "0.1.0"}
     parent_id: Optional[str] = None
+    # --- the whole trace ---
+    trace_id: str = ""                                   # unique per run
+    tracking: dict = field(default_factory=dict)         # task/config hashes, group_id, code version, verifier
+    config: dict = field(default_factory=dict)           # exactly what config_hash was computed from
+    messages: list = field(default_factory=list)         # every Event in the pool, in order
+    calls: list[ModelCall] = field(default_factory=list)
+    errors: list[ErrorRecord] = field(default_factory=list)
+    timing: dict = field(default_factory=dict)           # started_at / finished_at (unix s), scoring_ms
 
 
 #Observational_pool : an append only list of types events, its the source of trueh and nothing deleted from it 
