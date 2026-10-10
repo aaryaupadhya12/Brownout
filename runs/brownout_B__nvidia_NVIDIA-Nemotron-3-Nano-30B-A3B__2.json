@@ -1,0 +1,216 @@
+{
+  "task_id": "brownout_B",
+  "model_id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+  "run_date": "2026-10-07",
+  "run_index": 2,
+  "versions": {
+    "harness": "0.1.0",
+    "env": "0.1.0",
+    "grader": "0.2.0"
+  },
+  "steps": [
+    {
+      "turn": 1,
+      "tool": "get_metrics",
+      "args": {
+        "zone": "A"
+      },
+      "observation": {
+        "load": 300.0,
+        "mean_ms": 25.0,
+        "p99_ms": 114.99999999999999,
+        "overloaded": false
+      },
+      "model_ms": 1955.0457000732422,
+      "tool_ms": 0.01309998333454132,
+      "usage": {
+        "input_tokens": 659,
+        "output_tokens": 159,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    {
+      "turn": 2,
+      "tool": "get_metrics",
+      "args": {
+        "zone": "B"
+      },
+      "observation": {
+        "load": 300.0,
+        "mean_ms": 5000,
+        "p99_ms": 5000,
+        "overloaded": true
+      },
+      "model_ms": 2899.5741999242455,
+      "tool_ms": 0.026700086891651154,
+      "usage": {
+        "input_tokens": 752,
+        "output_tokens": 361,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    {
+      "turn": 3,
+      "tool": "get_metrics",
+      "args": {
+        "zone": "C"
+      },
+      "observation": {
+        "load": 300.0,
+        "mean_ms": 25.0,
+        "p99_ms": 114.99999999999999,
+        "overloaded": false
+      },
+      "model_ms": 1684.1837000101805,
+      "tool_ms": 0.02950010821223259,
+      "usage": {
+        "input_tokens": 831,
+        "output_tokens": 193,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    {
+      "turn": 4,
+      "tool": "shift_traffic",
+      "args": {
+        "zone_source": "B",
+        "zone_destination": "A",
+        "split_percentage": 20
+      },
+      "observation": {
+        "A": 0.39999999999999997,
+        "B": 0.26666666666666666,
+        "C": 0.3333333333333333
+      },
+      "model_ms": 6658.007200108841,
+      "tool_ms": 0.00919983722269535,
+      "usage": {
+        "input_tokens": 924,
+        "output_tokens": 922,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    {
+      "turn": 5,
+      "tool": "get_metrics",
+      "args": {
+        "zone": "A"
+      },
+      "observation": {
+        "load": 359.99999999999994,
+        "mean_ms": 27.14285714285714,
+        "p99_ms": 124.85714285714283,
+        "overloaded": false
+      },
+      "model_ms": 11546.209400054067,
+      "tool_ms": 0.031300121918320656,
+      "usage": {
+        "input_tokens": 1063,
+        "output_tokens": 1653,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    {
+      "turn": 6,
+      "tool": "get_metrics",
+      "args": {
+        "zone": "B"
+      },
+      "observation": {
+        "load": 240.0,
+        "mean_ms": 140.0,
+        "p99_ms": 644.0,
+        "overloaded": false
+      },
+      "model_ms": 1413.807300152257,
+      "tool_ms": 0.025499844923615456,
+      "usage": {
+        "input_tokens": 1182,
+        "output_tokens": 126,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    {
+      "turn": 7,
+      "tool": "get_metrics",
+      "args": {
+        "zone": "C"
+      },
+      "observation": {
+        "load": 300.0,
+        "mean_ms": 25.0,
+        "p99_ms": 114.99999999999999,
+        "overloaded": false
+      },
+      "model_ms": 1146.1149000097066,
+      "tool_ms": 0.009499955922365189,
+      "usage": {
+        "input_tokens": 1263,
+        "output_tokens": 118,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    {
+      "turn": 8,
+      "tool": "shift_traffic",
+      "args": {
+        "zone_source": "B",
+        "zone_destination": "C",
+        "split_percentage": 25
+      },
+      "observation": {
+        "A": 0.39999999999999997,
+        "B": 0.2,
+        "C": 0.39999999999999997
+      },
+      "model_ms": 47479.97949994169,
+      "tool_ms": 0.0066999346017837524,
+      "usage": {
+        "input_tokens": 1356,
+        "output_tokens": 6429,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    }
+  ],
+  "grader": {
+    "reward": 0.0,
+    "signals": {
+      "slo_ok": 1.0,
+      "cost_ok": 1.0,
+      "efficiency": 0,
+      "worst_p99_ms": 249.7142857142857,
+      "cost": 0.1333333333333333,
+      "overloaded": false,
+      "raw_reward": 0.8999999999999999,
+      "submmited": false
+    },
+    "grader_version": "0.2.0"
+  },
+  "ended_by": "max_turns",
+  "totals": {
+    "turns": 8,
+    "input_tokens": 8030,
+    "output_tokens": 9961,
+    "reasoning_tokens": 0,
+    "model_ms": 74782.92190027423,
+    "tool_ms": 0.15149987302720547,
+    "api_cost_usd": 0.0028724399999999995,
+    "price_per_mtok": [
+      0.06,
+      0.24
+    ]
+  },
+  "context_policy": {
+    "name": "identity",
+    "version": "0.1.0"
+  },
+  "parent_id": null
+}
