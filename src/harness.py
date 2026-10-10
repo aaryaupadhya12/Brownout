@@ -4,8 +4,11 @@ import time
 import uuid
 from dataclasses import asdict
 from datetime import date
-
-from .contracts import VERSIONS, ContextManager, Event, GraderOutput, Step, Trajectory, Usage
+from .pricing import *
+from .contracts import (VERSIONS, ContextManager, ErrorRecord, Event, GraderOutput, ModelCall,
+                        Step, Trajectory, Usage)
+from .scoring import EnvGradeVerifier
+from .tracking import code_version, config_hash, group_id, task_hash
 
 SYSTEM_PROMPT = (
     "You are an on-call engineer responding to a latency incident across three zones (A, B, C).\n"
@@ -29,27 +32,71 @@ def parse_args(call):
         return None, "arguments must be a JSON object"
     return args, None
 
-def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0):
+
+def assistant_message(reply):
+    """Build the assistant message that goes back into the conversation."""
+    msg = {"role": "assistant", "content": reply.text}
+    if reply.tool_calls:
+        msg["tool_calls"] = []
+        for c in reply.tool_calls:
+            arguments = c.raw_args or json.dumps(c.args)
+            tc = {"id": c.id, "type": "function",
+                  "function": {"name": c.name, "arguments": arguments}}
+            if c.extra:                       # Gemini 3: send the thought_signature back as received
+                tc["extra_content"] = c.extra
+            msg["tool_calls"].append(tc)
+    return msg
+
+
+def rollout_config(model, tools, max_turns, temperature, ctx):
+    """Everything that changes how a rollout behaves. Two runs with the same config and
+    the same task are 'similar runs' (same group_id). The scorer is left out on purpose:
+    re-grading with a new verifier doesn't change what the model did."""
+    return {"model_id": model.model_id,
+            "sampling": {"temperature": temperature},
+            "max_turns": max_turns,
+            "system_prompt": SYSTEM_PROMPT,
+            "nudge": NUDGE,
+            "tools": tools,
+            "context_policy": {"name": ctx.name, "version": VERSIONS["harness"]},
+            "versions": VERSIONS}
+
+
+def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
+                verifier=None, temperature=0.0):
     ctx = ctx or ContextManager()
     verifier = verifier or EnvGradeVerifier()
     started_at = time.time()
     tools = env.tool_schema()
     first_observation = env.reset(scenario)
     pool = [Event(0, "system", {"role": "system", "content": SYSTEM_PROMPT}),
-            Event(0, "task", {"role": "user", "content": observation})]
-    steps, ended_by, error = [], "max_turns", None
+            Event(0, "task", {"role": "user", "content": first_observation})]
+    steps = []
+    calls = []
+    errors = []
+    ended_by = "max_turns"
+    error = None
+    where = "harness"   # which part was running if something raises: model | env | harness
+
+    config = rollout_config(model, tools, max_turns, temperature, ctx)
+    task_sha = task_hash(scenario)
+    config_sha = config_hash(config)
+    tracking = {"task_key": scenario.get("id", "adhoc"),
+                "task_hash": task_sha,
+                "config_hash": config_sha,
+                "group_id": group_id(task_sha, config_sha),
+                "code": code_version(),
+                "verifier": {"name": verifier.name, "version": verifier.version}}
 
     try:
         for turn in range(1, max_turns + 1):
-            reply = model.complete(ctx.build(pool), tools)
-
-            msg = {"role": "assistant", "content": reply.text}
-            if reply.tool_calls:
-                msg["tool_calls"] = [
-                    {"id": c.id, "type": "function",
-                     "function": {"name": c.name, "arguments": c.raw_args or json.dumps(c.args)}}
-                    for c in reply.tool_calls]
-            pool.append(Event(turn, "assistant", msg))
+            messages = ctx.build(pool)
+            where = "model"
+            reply = model.complete(messages, tools, temperature)
+            where = "harness"
+            calls.append(ModelCall(turn, reply.latency_ms, reply.usage, reply.finish_reason,
+                                   len(reply.tool_calls), reply.retries))
+            pool.append(Event(turn, "assistant", assistant_message(reply)))
 
             # the model answered in plain text: count the turn and nudge it
             if not reply.tool_calls:
@@ -61,9 +108,16 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0):
             is_first_call = True
             for c in reply.tool_calls:
                 args, err = parse_args(c)
-                t0 = time.perf_counter()
-                obs = {"error": err} if err else env.step(c.name, args)
-                tool_ms = (time.perf_counter() - t0) * 1000
+
+                start = time.perf_counter()
+                if err:
+                    result = {"error": err}
+                else:
+                    where = "env"
+                    result = env.step(c.name, args)
+                    where = "harness"
+                tool_ms = (time.perf_counter() - start) * 1000
+
                 # every tool call gets a result message, even a malformed one
                 pool.append(Event(turn, "tool_result", {
                     "role": "tool", "tool_call_id": c.id, "content": json.dumps(result)}))
@@ -82,24 +136,55 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0):
             if env.done:
                 ended_by = "submit"
                 break
-    except Exception as e:                                 # grade() still runs; the error is recorded
-        ended_by, error = "error", repr(e)
+    except Exception as e:
+        ended_by = "error"
+        error = repr(e)
+        errors.append(ErrorRecord(where, type(e).__name__, str(e)))
 
-    reward, signals = env.grade()
-    totals = {"turns": len({s.turn for s in steps}),
-              "input_tokens": sum(s.usage.input_tokens for s in steps),
-              "output_tokens": sum(s.usage.output_tokens for s in steps),
-              "model_ms": sum(s.model_ms for s in steps),
-              "tool_ms": sum(s.tool_ms for s in steps)}
+    turns_seen = []
+    total_input = 0
+    total_output = 0
+    total_reasoning = 0
+    total_model_ms = 0.0
+    total_tool_ms = 0.0
+    for s in steps:
+        if s.turn not in turns_seen:
+            turns_seen.append(s.turn)
+        total_input += s.usage.input_tokens
+        total_output += s.usage.output_tokens
+        total_reasoning += s.usage.reasoning_tokens
+        total_model_ms += s.model_ms
+        total_tool_ms += s.tool_ms
+
+    totals = {"turns": len(turns_seen),
+              "input_tokens": total_input,
+              "output_tokens": total_output,
+              "reasoning_tokens": total_reasoning,
+              "model_ms": total_model_ms,
+              "tool_ms": total_tool_ms}
     if error:
         totals["error"] = error
-    return Trajectory(
+    
+    # build the trace first, so the verifier can read all of it
+    traj = Trajectory(
         task_id=scenario.get("id", "adhoc"), model_id=model.model_id,
         run_date=date.today().isoformat(), run_index=run_index,
         versions=VERSIONS, steps=steps,
         grader=GraderOutput(0.0, {}, verifier.version, ok=False, grader_name=verifier.name),
         ended_by=ended_by, totals=totals,
-        context_policy={"name": ctx.name, "version": VERSIONS["harness"]})
+        context_policy={"name": ctx.name, "version": VERSIONS["harness"]},
+        trace_id=uuid.uuid4().hex, tracking=tracking, config=config,
+        messages=[asdict(e) for e in pool], calls=calls, errors=errors)
+
+    # scoring runs even after an error: a failed rollout is data, not a crash
+    scoring_start = time.perf_counter()
+    grader, scoring_errors = verifier.score(scenario, traj, env)
+    traj.grader = grader
+    traj.errors.extend(scoring_errors)
+    traj.timing = {"started_at": started_at, "finished_at": time.time(),
+                   "scoring_ms": (time.perf_counter() - scoring_start) * 1000}
+    add_cost(traj)
+    return traj
 
 def save_trajectory(traj, folder="runs"):
     os.makedirs(folder, exist_ok=True)
@@ -126,4 +211,10 @@ def _round(x):
 def print_trajectory(traj):
     for s in traj.steps:
         print(f"turn {s.turn}  {s.tool or 'text'} {s.args} -> {_round(s.observation)}")
-    print(f"ended_by: {traj.ended_by}  reward: {traj.grader.reward:.4f}")
+    print(f"ended_by: {traj.ended_by}  reward: {traj.grader.reward:.4f}  "
+          f"scored_ok: {traj.grader.ok}  group: {traj.tracking.get('group_id')}")
+    for e in traj.errors:
+        print(f"error [{e.where}] {e.type}: {e.message}")
+    cost = traj.totals.get("api_cost_usd")
+    print("cost:", "n/a" if cost is None else f"${cost:.4f}")
+
