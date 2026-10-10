@@ -24,6 +24,7 @@ class ToolCall:
     name: str
     args: dict 
     raw_args: str =""
+    extra: dict = field(default_factory=dict) 
 
 @dataclass
 class Usage:
