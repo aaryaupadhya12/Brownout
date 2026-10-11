@@ -7,6 +7,7 @@ from datetime import date
 from .pricing import *
 from .contracts import (VERSIONS, ContextManager, ErrorRecord, Event, GraderOutput, ModelCall,
                         Step, Trajectory, Usage)
+from .interface_v1 import Task
 from .scoring import EnvGradeVerifier
 from .tracking import code_version, config_hash, group_id, task_hash
 
@@ -66,6 +67,13 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
                 verifier=None, temperature=0.0):
     ctx = ctx or ContextManager()
     verifier = verifier or EnvGradeVerifier()
+    # a v1 Task (src/interface_v1.py) or an old scenario dict
+    if isinstance(scenario, Task):
+        task_id = scenario.id
+        task_data = scenario.as_dict()
+    else:
+        task_id = scenario.get("id", "adhoc")
+        task_data = scenario
     started_at = time.time()
     tools = env.tool_schema()
     first_observation = env.reset(scenario)
@@ -79,9 +87,9 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
     where = "harness"   # which part was running if something raises: model | env | harness
 
     config = rollout_config(model, tools, max_turns, temperature, ctx)
-    task_sha = task_hash(scenario)
+    task_sha = task_hash(task_data)
     config_sha = config_hash(config)
-    tracking = {"task_key": scenario.get("id", "adhoc"),
+    tracking = {"task_key": task_id,
                 "task_hash": task_sha,
                 "config_hash": config_sha,
                 "group_id": group_id(task_sha, config_sha),
@@ -141,6 +149,14 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
         error = repr(e)
         errors.append(ErrorRecord(where, type(e).__name__, str(e)))
 
+    # v1 envs report their final state, so the verifier never has to call into the env
+    final_state = {}
+    if hasattr(env, "snapshot"):
+        try:
+            final_state = env.snapshot()
+        except Exception as e:
+            errors.append(ErrorRecord("env", type(e).__name__, f"snapshot: {e}"))
+
     turns_seen = []
     total_input = 0
     total_output = 0
@@ -167,14 +183,15 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
     
     # build the trace first, so the verifier can read all of it
     traj = Trajectory(
-        task_id=scenario.get("id", "adhoc"), model_id=model.model_id,
+        task_id=task_id, model_id=model.model_id,
         run_date=date.today().isoformat(), run_index=run_index,
         versions=VERSIONS, steps=steps,
         grader=GraderOutput(0.0, {}, verifier.version, ok=False, grader_name=verifier.name),
         ended_by=ended_by, totals=totals,
         context_policy={"name": ctx.name, "version": VERSIONS["harness"]},
         trace_id=uuid.uuid4().hex, tracking=tracking, config=config,
-        messages=[asdict(e) for e in pool], calls=calls, errors=errors)
+        messages=[asdict(e) for e in pool], calls=calls, errors=errors,
+        final_state=final_state)
 
     # scoring runs even after an error: a failed rollout is data, not a crash
     scoring_start = time.perf_counter()
@@ -183,6 +200,8 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
     traj.errors.extend(scoring_errors)
     traj.timing = {"started_at": started_at, "finished_at": time.time(),
                    "scoring_ms": (time.perf_counter() - scoring_start) * 1000}
+    if hasattr(env, "close"):
+        env.close()
     add_cost(traj)
     return traj
 

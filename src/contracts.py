@@ -109,6 +109,7 @@ class Trajectory:
     calls: list[ModelCall] = field(default_factory=list)
     errors: list[ErrorRecord] = field(default_factory=list)
     timing: dict = field(default_factory=dict)           # started_at / finished_at (unix s), scoring_ms
+    final_state: dict = field(default_factory=dict)      # env.snapshot() at episode end: what v1 verifiers read
 
 
 #Observational_pool : an append only list of types events, its the source of trueh and nothing deleted from it 
