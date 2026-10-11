@@ -103,16 +103,16 @@ class IncidentEnv:
                "cost": cost,
                "overloaded": overloaded, 
                "raw_reward": raw,
-               "submmited" : submitted
+               "submitted" : submitted
         }
         
         return reward , signals
     
 
     def step(self, name , args):
-        # submmited 
+        # submitted
         if self.done:
-            return {"error" : " epsiode is already submmited"}
+            return {"error" : " epsiode is already submitted"}
         
         self.step_used += 1
 

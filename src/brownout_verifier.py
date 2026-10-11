@@ -14,8 +14,8 @@ class BrownoutVerifier(Verifier):
 
     def _gate_passed(self, env):
         _, s = env.grade()
-        # "submmited" is the key IncidentEnv.grade() writes (src/env.py:106)
-        return s["submmited"] and not s["overloaded"]
+        # "submitted" is the key IncidentEnv.grade() writes (src/env.py:106)
+        return s["submitted"] and not s["overloaded"]
 
     @reward(weight=0.6)
     def slo(self, task, trace, env):
@@ -36,7 +36,7 @@ class BrownoutVerifier(Verifier):
     def state(self, task, trace, env):
         _, s = env.grade()
         return {"worst_p99_ms": s["worst_p99_ms"], "traffic_moved": s["cost"],
-                "overloaded": s["overloaded"], "submitted": s["submmited"],
+                "overloaded": s["overloaded"], "submitted": s["submitted"],
                 "slo_ok": s["slo_ok"], "cost_ok": s["cost_ok"]}
 
     @metric
