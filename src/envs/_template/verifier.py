@@ -1,4 +1,4 @@
-from ...scoring import Verifier, metric, reward
+from ...scoring import Verifier, metric, reward, stop
 
 
 class TemplateVerifier(Verifier):
@@ -9,6 +9,12 @@ class TemplateVerifier(Verifier):
     @reward(weight=1.0)
     def solved(self, task, trace):
         return 1.0 if trace.final_state.get("submitted") else 0.0   # TODO: the real check
+
+    # optional: end the episode early. Runs before every model call; True = stop now.
+    # @stop
+    # def looping(self, task, steps):
+    #     last = [(s.tool, s.args) for s in steps[-3:]]
+    #     return len(last) == 3 and len(set(map(str, last))) == 1    # same call 3 times
 
     @metric
     def steps_used(self, task, trace):
