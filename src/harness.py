@@ -8,6 +8,7 @@ from .pricing import *
 from .contracts import (VERSIONS, ContextManager, ErrorRecord, Event, GraderOutput, ModelCall,
                         Step, Trajectory, Usage)
 from .interface_v1 import Task
+from .limits import Progress, RolloutLimits, first_stop
 from .scoring import EnvGradeVerifier
 from .tracking import code_version, config_hash, group_id, task_hash
 
@@ -45,23 +46,32 @@ def assistant_message(reply):
     return msg
 
 
-def rollout_config(model, tools, max_turns, temperature, ctx, system_prompt):
+def rollout_config(model, tools, limits, temperature, ctx, system_prompt, stop_names=()):
     """Everything that changes how a rollout behaves. Two runs with the same config and
     the same task are 'similar runs' (same group_id). The scorer is left out on purpose:
-    re-grading with a new verifier doesn't change what the model did."""
-    return {"model_id": model.model_id,
+    re-grading with a new verifier doesn't change what the model did. Its @stop rules
+    are the exception: they decide when the episode ends, so their names are included.
+    New keys are only added when set, so older runs keep their group_id."""
+    config = {"model_id": model.model_id,
             "sampling": {"temperature": temperature},
-            "max_turns": max_turns,
+            "max_turns": limits.max_turns,
             "system_prompt": system_prompt,
             "nudge": NUDGE,
             "tools": tools,
             "context_policy": {"name": ctx.name, "version": VERSIONS["harness"]},
             "versions": VERSIONS}
+    if limits.as_config():
+        config["limits"] = limits.as_config()
+    if stop_names:
+        config["stops"] = list(stop_names)
+    return config
 
 
 def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
-                verifier=None, temperature=0.0):
+                verifier=None, temperature=0.0, limits=None):
+    """limits: a RolloutLimits (src/limits.py). Without one, only max_turns applies."""
     ctx = ctx or ContextManager()
+    limits = limits or RolloutLimits(max_turns=max_turns)
     verifier = verifier or EnvGradeVerifier()
     # a v1 Task (src/interface_v1.py) or an old scenario dict
     if isinstance(scenario, Task):
@@ -81,9 +91,11 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
     errors = []
     ended_by = "max_turns"
     error = None
-    where = "harness"   # which part was running if something raises: model | env | harness
+    where = "harness"   # which part was running if something raises: model | env | scorer | harness
+    progress = Progress()
 
-    config = rollout_config(model, tools, max_turns, temperature, ctx, system_prompt)
+    stop_names = [name for name, _ in verifier.scorers("stop")]
+    config = rollout_config(model, tools, limits, temperature, ctx, system_prompt, stop_names)
     task_sha = task_hash(task_data)
     config_sha = config_hash(config)
     tracking = {"task_key": task_id,
@@ -94,11 +106,24 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
                 "verifier": {"name": verifier.name, "version": verifier.version}}
 
     try:
-        for turn in range(1, max_turns + 1):
+        turn = 0
+        while True:
+            # before every model call: framework limits first, then the verifier's @stop rules
+            reason = limits.reached(progress)
+            if reason is None:
+                where = "scorer"
+                reason = first_stop(verifier, scenario, steps)
+                where = "harness"
+            if reason is not None:
+                ended_by = reason
+                break
+
+            turn += 1
             messages = ctx.build(pool)
             where = "model"
             reply = model.complete(messages, tools, temperature)
             where = "harness"
+            progress.add(reply.usage)
             calls.append(ModelCall(turn, reply.latency_ms, reply.usage, reply.finish_reason,
                                    len(reply.tool_calls), reply.retries))
             pool.append(Event(turn, "assistant", assistant_message(reply)))

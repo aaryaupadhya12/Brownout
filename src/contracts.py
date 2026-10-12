@@ -97,7 +97,7 @@ class Trajectory:
     versions: dict
     steps: list[Step]
     grader: GraderOutput
-    ended_by: str                     # submit | max_turns | error
+    ended_by: str                     # submit | max_turns | max_total_tokens | max_seconds | <@stop name> | error
     totals: dict = field(default_factory=dict)
     context_policy: dict = field(default_factory=dict)   # {"name": "identity", "version": "0.1.0"}
     parent_id: Optional[str] = None

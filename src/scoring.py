@@ -4,6 +4,7 @@ A Verifier is a class with scorer methods. Mark each one:
 
     @reward(weight=0.6)   counts toward the reward:  reward = sum(score * weight)
     @metric               recorded only, never added into the reward
+    @stop                 ends the episode early when it returns True (src/limits.py)
 
 Every scorer gets the WHOLE trace (messages, steps, model calls, errors, final_state),
 so it can score the process, not just the final state. It returns a number, or a
@@ -34,6 +35,14 @@ def reward(weight=1.0):
 
 def metric(fn):
     fn.scorer_kind = "metric"
+    return fn
+
+
+def stop(fn):
+    """Marks fn(self, task, steps) -> bool: True ends the episode before the next model
+    call, and the method's name becomes trajectory.ended_by (src/limits.py:first_stop)."""
+    # TODO(you): mark it the same way metric() does, with scorer_kind "stop"
+    fn.scorer_kind = "stop"
     return fn
 
 
