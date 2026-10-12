@@ -55,7 +55,7 @@ bld/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
-.runs/
+runs/
 .venv/
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
@@ -428,3 +428,6 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# local scratch scripts that hold API setup: never commit
+raw_call.py

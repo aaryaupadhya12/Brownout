@@ -6,7 +6,7 @@ from trace.final_state (facts the env reported) and task.spec (the thresholds).
 No env is passed in, so this verifier can re-grade a saved trajectory on its own.
 """
 
-from ..scoring import Verifier, metric, reward
+from ....scoring import Verifier, metric, reward
 
 
 class BrownoutVerifierV1(Verifier):

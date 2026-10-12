@@ -1,9 +1,9 @@
 import json, tempfile, unittest
-from src.env import IncidentEnv
+from src.envs.SystemEnv.brownout.env import IncidentEnv
 from src.fake_model import FakeModel, call, scripted
 from src.harness import run_episode, save_trajectory
 from src.scoring import Verifier, EnvGradeVerifier, metric, reward
-from src.brownout_verifier import BrownoutVerifier
+from src.envs.SystemEnv.brownout.verifier_legacy import BrownoutVerifier
 from src.tracking import task_hash, group_saved_runs
 
 BASE = {"arrivals": 900, "capacity": 500, "base_delay": 20}

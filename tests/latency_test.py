@@ -1,8 +1,8 @@
 import unittest
-from src.env import IncidentEnv
+from src.envs.SystemEnv.brownout.env import IncidentEnv
 import inspect
-from src.env import IncidentEnv
-from src.policies import *
+from src.envs.SystemEnv.brownout.env import IncidentEnv
+from src.envs.SystemEnv.brownout.policies import *
 SCENARIO = {"arrivals": 900, "capacity": 500, "base_delay": 20}
 
 class TestLatency(unittest.TestCase):

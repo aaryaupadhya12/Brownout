@@ -5,7 +5,7 @@ any zone is overloaded or the episode was never submitted), but each part is now
 named reward, so a saved trajectory shows WHY a run scored what it did.
 """
 
-from .scoring import Verifier, metric, reward
+from ....scoring import Verifier, metric, reward
 
 
 class BrownoutVerifier(Verifier):
@@ -14,7 +14,7 @@ class BrownoutVerifier(Verifier):
 
     def _gate_passed(self, env):
         _, s = env.grade()
-        # "submitted" is the key IncidentEnv.grade() writes (src/env.py:106)
+        # "submitted" is the key IncidentEnv.grade() writes (env.py)
         return s["submitted"] and not s["overloaded"]
 
     @reward(weight=0.6)

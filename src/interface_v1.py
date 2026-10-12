@@ -39,6 +39,8 @@ class TaskSource(Protocol):
 
 
 class Env(Protocol):
+    system_prompt: str    # the system message for this env (the harness has no env-specific text)
+
     def reset(self, task: Task) -> str:
         """In: Task. Out: the opening prompt for the agent."""
         ...
@@ -65,7 +67,7 @@ class Env(Protocol):
 
 class Verifier(Protocol):
     """src/scoring.py:Verifier implements this. Metrics are facts (@metric), rewards
-    are policy on top of them (@reward, weighted); see src/envs/brownout_verifierv1.py."""
+    are policy on top of them (@reward, weighted); see src/envs/SystemEnv/brownout/verifier.py."""
     name: str
     version: str
 

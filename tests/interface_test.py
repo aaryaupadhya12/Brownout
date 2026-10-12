@@ -1,6 +1,6 @@
 import json, tempfile, unittest
-from src.env_v1 import BrownoutEnv, BrownoutTasks
-from src.envs.brownout_verifierv1 import BrownoutVerifierV1
+from src.envs.SystemEnv.brownout.v1 import BrownoutEnv, BrownoutTasks
+from src.envs.SystemEnv.brownout.verifier import BrownoutVerifierV1
 from src.fake_model import FakeModel, call, scripted
 from src.harness import run_episode, save_trajectory
 from src.scoring import EnvGradeVerifier

@@ -12,7 +12,6 @@ import os
 from .contracts import ModelClient
 from .harness import print_trajectory, run_episode, save_trajectory
 from .registry import get
-from Clients.openai_compact import OpenAICompatClient
 
 
 def run_benchmark(name: str, make_model: Callable[[], ModelClient], trials: int = 1,
@@ -39,6 +38,9 @@ def main(argv=None):
     parser.add_argument("--api-key-env", default="OPENAI_API_KEY",
                         help="name of the env var holding the key (never pass the key itself)")
     args = parser.parse_args(argv)
+
+    # imported here so run_benchmark (and its tests) don't need the openai package
+    from Clients.openai_compact import OpenAICompatClient
 
     make_model = lambda : OpenAICompatClient(args.model, args.base_url, os.environ[args.api_key_env])
     trajectories = run_benchmark(name = args.env, make_model=make_model, trials=args.trials,out_dir=args.out,max_turns=args.max_turns)

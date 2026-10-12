@@ -1,5 +1,5 @@
 import json, os, tempfile, unittest
-from src.env import IncidentEnv
+from src.envs.SystemEnv.brownout.env import IncidentEnv
 from src.fake_model import FakeModel, call, bad_call, scripted
 from src.harness import run_episode, print_trajectory, save_trajectory, NUDGE
 from src.contracts import *

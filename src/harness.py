@@ -11,12 +11,8 @@ from .interface_v1 import Task
 from .scoring import EnvGradeVerifier
 from .tracking import code_version, config_hash, group_id, task_hash
 
-SYSTEM_PROMPT = (
-    "You are an on-call engineer responding to a latency incident across three zones (A, B, C).\n"
-    "Tools: get_metrics(zone), shift_traffic(zone_source, zone_destination, split_percentage), submit().\n"
-    "Investigate before acting, and move only as much traffic as needed. "
-    "Call submit() when the incident is resolved or when no action is needed."
-)
+# each env brings its own system prompt (env.system_prompt); this is only for envs without one
+DEFAULT_SYSTEM_PROMPT = "Use the tools to complete the task. Call submit() when you are done."
 NUDGE = "Use a tool, or call submit() if you are done."
 
 
@@ -49,14 +45,14 @@ def assistant_message(reply):
     return msg
 
 
-def rollout_config(model, tools, max_turns, temperature, ctx):
+def rollout_config(model, tools, max_turns, temperature, ctx, system_prompt):
     """Everything that changes how a rollout behaves. Two runs with the same config and
     the same task are 'similar runs' (same group_id). The scorer is left out on purpose:
     re-grading with a new verifier doesn't change what the model did."""
     return {"model_id": model.model_id,
             "sampling": {"temperature": temperature},
             "max_turns": max_turns,
-            "system_prompt": SYSTEM_PROMPT,
+            "system_prompt": system_prompt,
             "nudge": NUDGE,
             "tools": tools,
             "context_policy": {"name": ctx.name, "version": VERSIONS["harness"]},
@@ -76,8 +72,9 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
         task_data = scenario
     started_at = time.time()
     tools = env.tool_schema()
+    system_prompt = getattr(env, "system_prompt", DEFAULT_SYSTEM_PROMPT)
     first_observation = env.reset(scenario)
-    pool = [Event(0, "system", {"role": "system", "content": SYSTEM_PROMPT}),
+    pool = [Event(0, "system", {"role": "system", "content": system_prompt}),
             Event(0, "task", {"role": "user", "content": first_observation})]
     steps = []
     calls = []
@@ -86,7 +83,7 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
     error = None
     where = "harness"   # which part was running if something raises: model | env | harness
 
-    config = rollout_config(model, tools, max_turns, temperature, ctx)
+    config = rollout_config(model, tools, max_turns, temperature, ctx, system_prompt)
     task_sha = task_hash(task_data)
     config_sha = config_hash(config)
     tracking = {"task_key": task_id,

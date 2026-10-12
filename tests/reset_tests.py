@@ -1,5 +1,5 @@
 import unittest
-from src.env import IncidentEnv
+from src.envs.SystemEnv.brownout.env import IncidentEnv
 
 class TestEnv(unittest.TestCase):
     def test_two_degraded(self):

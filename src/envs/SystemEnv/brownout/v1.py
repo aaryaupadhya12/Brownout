@@ -7,7 +7,7 @@ the env and the verifier read the same numbers from task.spec.
 """
 
 from .env import IncidentEnv
-from .interface_v1 import Task
+from ....interface_v1 import Task
 
 
 BASE = {"arrivals": 900, "capacity": 500, "base_delay": 20,
@@ -63,9 +63,3 @@ class BrownoutEnv(IncidentEnv):
     def close(self):
         pass
 
-
-
-from .envs.brownout_verifierv1 import BrownoutVerifierV1  # noqa: E402
-from .registry import EnvSpec, register  # noqa: E402
-
-register(EnvSpec("brownout", BrownoutTasks, BrownoutEnv, BrownoutVerifierV1))
