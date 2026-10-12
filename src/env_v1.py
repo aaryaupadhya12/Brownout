@@ -62,3 +62,10 @@ class BrownoutEnv(IncidentEnv):
 
     def close(self):
         pass
+
+
+# --- registry (src/registry.py): makes "brownout" a name the runner can build ---
+from .envs.brownout_verifierv1 import BrownoutVerifierV1  # noqa: E402
+from .registry import EnvSpec, register  # noqa: E402
+
+register(EnvSpec("brownout", BrownoutTasks, BrownoutEnv, BrownoutVerifierV1))
