@@ -30,6 +30,41 @@ the harness and the runner never change:
 The full guide, with the rules for each file and a checklist, is in
 [src/envs/README.md](src/envs/README.md). `src/envs/SystemEnv/brownout/` is the worked example.
 
+## How it compares: Verifiers, OpenEnv and Brownout
+
+Brownout is a deliberately small harness, written from scratch to learn how RL environment
+frameworks work. [Verifiers](https://github.com/PrimeIntellect-ai/verifiers) (Prime Intellect)
+and [OpenEnv](https://github.com/huggingface/OpenEnv) (Hugging Face) are the mature references.
+"Planned" means not built yet.
+
+| | Verifiers (v1) | OpenEnv | Brownout |
+|---|---|---|---|
+| **What an env is** | A Python package: `Taskset` + `Harness` + `Env` | An HTTP/WebSocket server with typed `Action` / `Observation` / `State` | A folder: `env.py`, `tasks.py`, `verifier.py`, `__init__.py` |
+| **Who runs the agent loop** | The framework, or any outside agent (Codex, Claude Code...) behind its interception proxy | Not OpenEnv: the caller (e.g. a Miles agent function) drives `reset` / `step` | One loop, `run_episode` in `src/harness.py` |
+| **Finding an env by name** | `id` → Python module import (`verifiers/v1/utils/loaders.py`) | Installed `openenv-*` packages + `openenv.yaml`, `AutoEnv.from_env` / `from_hub` | Every folder under `src/envs/` with an `__init__.py` (`src/registry.py`) |
+| **Scoring** | `@reward` / `@metric` on the task, rubric and judge classes | Inside the env (e.g. an `evaluate` action), plus `Rubric` containers and an LLM judge | `@reward` / `@metric` verifier that reads only `(task, trajectory)`, never the env |
+| **Re-grade a saved run** | Yes, from the stored trace | Not by design: the score comes from live env state | Yes: the env's final state is saved in `trajectory.final_state` |
+| **Stop conditions / limits** | `@stop` hooks, `RolloutLimits` (turns, tokens), per-stage `RolloutTimeouts` | Left to the caller | `max_turns` and `submit` only; token limits, `@stop` and timeouts planned |
+| **Failures** | Typed errors; a failed rollout is still data | Errors returned to the client | Failed rollouts kept, with `ErrorRecord(where=model/env/scorer/harness)`; a crashed scorer marks the run `ok=False` rather than reward 0 |
+| **Comparable runs** | Results stored per run, resumable | Not covered | `task_hash` + `config_hash` → `group_id`: same id means same task and same settings |
+| **Concurrency** | Async throughout | Server-side, `SUPPORTS_CONCURRENT_SESSIONS` per env | Sequential; 3-4 parallel episodes planned |
+| **Sandboxes** | Docker, Modal, E2B, Prime, Apptainer, subprocess runtimes | Several providers (uv, Docker, Modal, Daytona, HF...) | None yet: envs run in-process |
+| **Adapters to other ecosystems** | Harbor, OpenEnv, NeMo Gym, TextArena tasksets | Importers for other env formats | Planned: OpenEnv envs from the HF Hub, and a Miles agent function |
+| **Training** | prime-rl | None (env-only); used by trainers such as Miles | Planned: SGLang + Miles |
+| **Size** | Large, production | Large, production | ~1,300 lines of Python, readable in an afternoon |
+
+**Where Brownout differs on purpose**
+
+- **The verifier never touches the env.** The env reports facts with `snapshot()`, and all pass/fail
+  thresholds live in `task.spec`. Any saved trajectory can be re-scored with a new verifier, offline.
+- **Adding an env means adding a folder.** There is nothing to install, no server and no config entry.
+- **Failure is data.** Every error records where it happened, so an infrastructure failure isn't
+  mistaken for the model failing. That matters for RL, where the first means "drop the sample" and
+  the second means "reward 0".
+
+**Where Brownout is behind:** no sandboxes, no async or concurrency, no token or time limits yet,
+no LLM judge, and no trainer integration. See the roadmap below.
+
 ## About this project
 
 The architecture is Simple Every benhcamrk (targeted at the end of october is 30-40 High value benchmarks ) in one registry entry . The harness , runner and exporters never know which benchmark they are running 
