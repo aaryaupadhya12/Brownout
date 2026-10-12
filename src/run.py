@@ -8,29 +8,24 @@ resume (Phase 6), and several envs/models in one call.
 
 import argparse
 from typing import Callable
-
+import os 
 from .contracts import ModelClient
 from .harness import print_trajectory, run_episode, save_trajectory
 from .registry import get
+from Clients.openai_compact import OpenAICompatClient
 
 
 def run_benchmark(name: str, make_model: Callable[[], ModelClient], trials: int = 1,
                   out_dir: str | None = "runs", max_turns: int = 8) -> list:
-    """Returns every Trajectory. Saves each to out_dir (skip saving if out_dir is None).
-
-    make_model is a factory, not a model: a fresh client per episode (FakeModel keeps
-    its script as state, and later episodes will run concurrently).
-
-    TODO(you):
-      spec = get(name)
-      for each task in spec.tasks().load():
-          for run_index in range(trials):
-              traj = run_episode(spec.env(), task, make_model(),
-                                 max_turns=max_turns, run_index=run_index,
-                                 verifier=spec.verifier())
-              save it if out_dir, collect it
-    """
-    raise NotImplementedError
+    value = get(name)
+    trajectories = []
+    for task in value.tasks().load():
+        for index in range(trials):
+            traj = run_episode(value.env(), scenario= task, model = make_model(), max_turns = max_turns, ctx = None , run_index = index, verifier= value.verifier() , temperature= 0.0 )
+            trajectories.append(traj)
+            if out_dir is not None:
+                save_trajectory(traj, folder=out_dir) 
+    return trajectories
 
 
 def main(argv=None):
@@ -45,10 +40,10 @@ def main(argv=None):
                         help="name of the env var holding the key (never pass the key itself)")
     args = parser.parse_args(argv)
 
-    # TODO(you): build make_model from Clients/openai_compact.py:
-    #   lambda: OpenAICompatClient(args.model, args.base_url, os.environ[args.api_key_env])
-    # then call run_benchmark(...) and print_trajectory() each result.
-    raise NotImplementedError
+    make_model = lambda : OpenAICompatClient(args.model, args.base_url, os.environ[args.api_key_env])
+    trajectories = run_benchmark(name = args.env, make_model=make_model, trials=args.trials,out_dir=args.out,max_turns=args.max_turns)
+    for traj in trajectories:
+        print_trajectory(traj)
 
 
 if __name__ == "__main__":

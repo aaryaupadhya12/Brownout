@@ -19,7 +19,7 @@ from typing import Callable
 
 from .interface_v1 import Env, TaskSource, Verifier
 
-# modules that call register() when imported; add each new env module here
+
 BUILTIN_MODULES = ["env_v1"]
 
 
@@ -37,7 +37,8 @@ _loaded = False
 
 def register(spec: EnvSpec) -> None:
     # TODO(you): refuse a second spec under the same name (raise ValueError),
-    # so two envs can't silently overwrite each other.
+    if spec.name in REGISTRY:
+        raise ValueError(f"Environment '{spec.name}' is already registered")
     REGISTRY[spec.name] = spec
 
 
@@ -54,13 +55,13 @@ def _load_builtins() -> None:
 def names() -> list[str]:
     """Every registered env name, sorted."""
     _load_builtins()
-    # TODO(you)
-    raise NotImplementedError
+    return sorted(REGISTRY.keys())
 
 
 def get(name: str) -> EnvSpec:
     """The spec for `name`. An unknown name raises KeyError listing the available names,
     e.g.  unknown env 'browout'; available: brownout"""
     _load_builtins()
-    # TODO(you)
-    raise NotImplementedError
+    if name not in REGISTRY:
+        raise KeyError(f"unknown env {name!r}; available: {', '.join(names())}")
+    return REGISTRY[name]
