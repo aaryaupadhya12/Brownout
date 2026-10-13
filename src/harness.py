@@ -9,6 +9,7 @@ from .contracts import (VERSIONS, ContextManager, ErrorRecord, Event, GraderOutp
                         Step, Trajectory, Usage)
 from .interface_v1 import Task
 from .limits import Progress, RolloutLimits, first_stop
+from .store import episode_path, write_json
 from .scoring import EnvGradeVerifier
 from .tracking import code_version, config_hash, group_id, task_hash
 
@@ -67,12 +68,11 @@ def rollout_config(model, tools, limits, temperature, ctx, system_prompt, stop_n
     return config
 
 
-def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
-                verifier=None, temperature=0.0, limits=None):
-    """limits: a RolloutLimits (src/limits.py). Without one, only max_turns applies."""
+def plan_episode(env, scenario, model, verifier, limits, temperature=0.0, ctx=None):
+    """Everything that identifies an episode, computed WITHOUT running it: the task id,
+    the exact config, and the tracking block with group_id. run_episode uses it, and
+    so does resume, to know an episode's file name before deciding to run it."""
     ctx = ctx or ContextManager()
-    limits = limits or RolloutLimits(max_turns=max_turns)
-    verifier = verifier or EnvGradeVerifier()
     # a v1 Task (src/interface_v1.py) or an old scenario dict
     if isinstance(scenario, Task):
         task_id = scenario.id
@@ -80,20 +80,8 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
     else:
         task_id = scenario.get("id", "adhoc")
         task_data = scenario
-    started_at = time.time()
     tools = env.tool_schema()
     system_prompt = getattr(env, "system_prompt", DEFAULT_SYSTEM_PROMPT)
-    first_observation = env.reset(scenario)
-    pool = [Event(0, "system", {"role": "system", "content": system_prompt}),
-            Event(0, "task", {"role": "user", "content": first_observation})]
-    steps = []
-    calls = []
-    errors = []
-    ended_by = "max_turns"
-    error = None
-    where = "harness"   # which part was running if something raises: model | env | scorer | harness
-    progress = Progress()
-
     stop_names = [name for name, _ in verifier.scorers("stop")]
     config = rollout_config(model, tools, limits, temperature, ctx, system_prompt, stop_names)
     task_sha = task_hash(task_data)
@@ -104,6 +92,30 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
                 "group_id": group_id(task_sha, config_sha),
                 "code": code_version(),
                 "verifier": {"name": verifier.name, "version": verifier.version}}
+    return {"task_id": task_id, "tools": tools, "system_prompt": system_prompt,
+            "config": config, "tracking": tracking}
+
+
+def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
+                verifier=None, temperature=0.0, limits=None):
+    """limits: a RolloutLimits (src/limits.py). Without one, only max_turns applies."""
+    ctx = ctx or ContextManager()
+    limits = limits or RolloutLimits(max_turns=max_turns)
+    verifier = verifier or EnvGradeVerifier()
+    plan = plan_episode(env, scenario, model, verifier, limits, temperature, ctx)
+    task_id, tools, system_prompt = plan["task_id"], plan["tools"], plan["system_prompt"]
+    config, tracking = plan["config"], plan["tracking"]
+    started_at = time.time()
+    first_observation = env.reset(scenario)
+    pool = [Event(0, "system", {"role": "system", "content": system_prompt}),
+            Event(0, "task", {"role": "user", "content": first_observation})]
+    steps = []
+    calls = []
+    errors = []
+    ended_by = "max_turns"
+    error = None
+    where = "harness"   # which part was running if something raises: model | env | scorer | harness
+    progress = Progress()
 
     try:
         turn = 0
@@ -230,11 +242,9 @@ def run_episode(env, scenario, model, max_turns=8, ctx=None, run_index=0,
 def save_trajectory(traj, folder="runs"):
     os.makedirs(folder, exist_ok=True)
     # the group id in the name stops a run with a different config overwriting this one
-    group = traj.tracking.get("group_id", "nogroup")[:8]
-    name = f"{traj.task_id}__{traj.model_id.replace('/', '_')}__{group}__{traj.run_index}.json"
-    path = os.path.join(folder, name)
-    with open(path, "w") as f:
-        json.dump(asdict(traj), f, indent=2)
+    path = episode_path(folder, traj.task_id, traj.model_id,
+                        traj.tracking.get("group_id", ""), traj.run_index)
+    write_json(path, asdict(traj))
     return path
 
 
