@@ -1,0 +1,15 @@
+# Model providers: where to send requests, and the NAME of the env var holding the key.
+# No secret values here, ever. This file is safe to commit.
+# Set the values in .env (local, git-ignored) or as Modal secrets. See src/providers.py.
+
+[nebius]
+base_url = "https://api.tokenfactory.nebius.com/v1"   # TODO: check against your Nebius console
+api_key_env = "NEBIUS_API_KEY"
+
+[hf]
+base_url = "https://router.huggingface.co/v1"         # TODO: check against the HF Inference Providers docs
+api_key_env = "HF_TOKEN"
+
+[sglang]                                             
+base_url = "http://localhost:30000/v1"
+api_key_env = ""
