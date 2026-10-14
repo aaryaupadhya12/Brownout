@@ -1,1 +1,3 @@
 # Versioning requirements for this 
+openai
+pydantic>=2   # Cloud-OpsBench tool schemas (src/envs/SystemEnv/cloudops/vendor)

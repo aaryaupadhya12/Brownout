@@ -3,7 +3,7 @@
 # Set the values in .env (local, git-ignored) or as Modal secrets. See src/providers.py.
 
 [nebius]
-base_url = "https://api.tokenfactory.nebius.com/v1"   # TODO: check against your Nebius console
+base_url = "https://api.tokenfactory.nebius.com/v1/"
 api_key_env = "NEBIUS_API_KEY"
 
 [hf]

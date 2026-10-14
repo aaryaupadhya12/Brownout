@@ -135,7 +135,7 @@ See `tests/interface_test.py` for Brownout's version: `good` and `one_shift` bot
 ### 8. Run it on a real model
 
 ```bash
-python -m src.run myenv --trials 3 --model <model-id> --base-url <openai-compatible-url> --api-key-env NEBIUS_API_KEY
+python -m src.run myenv --trials 3 --provider nebius --model <model-id>    # providers: configs/providers.toml
 ```
 
 Trajectories are saved to `runs/` (which git ignores). Read a few, **especially the perfect scores**: a perfect score that took a shortcut means the grader has a hole.
