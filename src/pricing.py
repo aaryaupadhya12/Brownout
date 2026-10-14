@@ -1,5 +1,6 @@
 PRICES = {
     "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": (0.06, 0.24),
+    "deepseek-ai/DeepSeek-V4-Flash-0731": (0.14,0.28)
 }
 
 def add_cost(traj):
