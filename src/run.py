@@ -16,11 +16,13 @@ from .contracts import ModelClient
 from .harness import plan_episode, print_trajectory, run_episode, save_trajectory
 from .limits import RolloutLimits
 from .registry import get
+from .splits import select
 from .store import episode_path, is_done
 
 def run_benchmark(name: str, make_model: Callable[[], ModelClient], trials: int = 1,
                   out_dir: str | None = "runs", max_turns: int = 8, limits=None,
-                  resume: bool = False, concurrency: int = 1) -> list:
+                  resume: bool = False, concurrency: int = 1,
+                  split: tuple[str, str] | None = None) -> list:
     """Returns the trajectories that ran this time (skipped ones are not included),
     in plan order (task order, then trial index), whatever order they finished in.
 
@@ -29,13 +31,19 @@ def run_benchmark(name: str, make_model: Callable[[], ModelClient], trials: int 
     the GIL, so threads are enough: no asyncio, nothing to pickle. Every job has its own
     env/model/verifier and its own file, and write_json is atomic, so no locks.
     Rate limits: each client retries a 429 itself (Clients/openai_compact.py).
+
+    split: (split_file, part), e.g. ("splits/cloudops-boutique.json", "train"): run only
+    that part's tasks (src/splits.py). None = every task.
     """
     value = get(name)
     limits = limits or RolloutLimits(max_turns=max_turns)
 
     def plan_jobs():
         """Yield (env, task, model, verifier, index) for every episode still to run."""
-        for task in value.tasks().load():
+        tasks = value.tasks().load()
+        if split is not None:
+            tasks = select(tasks, *split)
+        for task in tasks:
             for index in range(trials):
                 env, model, verifier = value.env(), make_model(), value.verifier()
 
@@ -99,14 +107,20 @@ def main(argv=None):
     parser.add_argument("--provider", required=True,
                         help="a section of configs/providers.toml, e.g. nebius, hf, sglang")
     parser.add_argument("--concurrency", type=int, default=1, help="episodes run at the same time")
+    parser.add_argument("--split-file", default=None, help="a saved split, e.g. splits/cloudops-boutique.json")
+    parser.add_argument("--split", default=None, choices=("train", "val", "test"),
+                        help="run only this part of --split-file")
     args = parser.parse_args(argv)
+    if (args.split_file is None) != (args.split is None):
+        parser.error("--split-file and --split go together")
 
     from .providers import make_client   # reads the key from .env / the environment
 
     make_model = lambda : make_client(args.provider, args.model)
     limits = RolloutLimits(args.max_turns, args.max_tokens, args.max_seconds)
     trajectories = run_benchmark(name = args.env, make_model=make_model, trials=args.trials,out_dir=args.out,max_turns=args.max_turns, limits=limits, resume=args.resume,
-                                 concurrency=args.concurrency)
+                                 concurrency=args.concurrency,
+                                 split=(args.split_file, args.split) if args.split else None)
     for traj in trajectories:
         print_trajectory(traj)
 
