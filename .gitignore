@@ -431,3 +431,6 @@ FodyWeavers.xsd
 
 # local scratch scripts that hold API setup: never commit
 raw_call.py
+
+# benchmark datasets cloned locally (e.g. data/Cloud-OpsBench)
+data/
