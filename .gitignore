@@ -434,3 +434,6 @@ raw_call.py
 
 # benchmark datasets cloned locally (e.g. data/Cloud-OpsBench)
 data/
+
+# toy RL stack notes (M1-M7), local only
+/bin/
