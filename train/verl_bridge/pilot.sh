@@ -24,8 +24,8 @@ export PYTHONPATH=$PWD:${PYTHONPATH:-}        # so verl's workers can import src
 export BROWNOUT_TOOL_PARSER=${BROWNOUT_TOOL_PARSER:-qwen3_coder}   # hermes for Qwen3-8B
 export BROWNOUT_MAX_TURNS=20
 export BROWNOUT_TOKENS_PER_TURN=4096
-export BROWNOUT_MODEL_ID=nemotron-nano-lora-$STAGE
-export BROWNOUT_SAVE_DIR=runs/train-$STAGE    # python -m src.report runs/train-$STAGE
+export BROWNOUT_MODEL_ID=${BROWNOUT_MODEL_ID:-nemotron-nano-lora-$STAGE}
+export BROWNOUT_SAVE_DIR=${BROWNOUT_SAVE_DIR:-runs/train-$STAGE}    # python -m src.report runs/train-$STAGE
 # CLOUDOPSBENCH_ROOT must point at the Cloud-OpsBench clone on this machine (.env works)
 
 python -m verl.trainer.main_ppo \
