@@ -1,0 +1,4 @@
+# verl reads this via actor_rollout_ref.rollout.agent.agent_loop_config_path.
+# Rows whose agent_name is "brownout" (all of them, see make_dataset.py) use this class.
+- name: brownout
+  _target_: train.verl_bridge.agent_loop.BrownoutAgentLoop
