@@ -25,8 +25,10 @@ Env knobs (set them in the launch script):
 """
 
 import asyncio
+import functools
 import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 
 from verl.experimental.agent_loop.agent_loop import AgentLoopBase, AgentLoopMetrics, AgentLoopOutput, register
@@ -41,6 +43,10 @@ from .renderers import make_renderers
 from .token_model import ContextFull, TokenModel
 
 _TASKS: dict[str, dict] = {}     # env name -> {task_id: Task}, loaded once per worker process
+
+# Episodes block their thread while verl's coroutines run on the event loop. On asyncio's
+# shared pool (32 threads) > 32 episodes per worker deadlock: test x 4 samples = ~58/worker.
+_EPISODES = ThreadPoolExecutor(max_workers=512)
 
 
 def find_task(env_name: str, task_id: str):
@@ -67,9 +73,18 @@ class BrownoutAgentLoop(AgentLoopBase):
             """Run a verl coroutine from the harness's worker thread and wait for it."""
             return asyncio.run_coroutine_threadsafe(coro, loop).result()
 
+        # verl's server tags each generation with the weight version it used (min/max_global_steps
+        # in TokenOutput.extra_fields); the trainer's metrics require them on every sample.
+        # Same rule as verl's ToolAgentLoop: keep the first turn's fields, then only raise max.
+        gen_fields: dict = {}
+
         def generate(ids, sampling):
-            out = on_loop(self.server_manager.generate(            # VERIFY: kwargs + TokenOutput fields
+            out = on_loop(self.server_manager.generate(
                 request_id=request_id, prompt_ids=ids, sampling_params=sampling))
+            if not gen_fields:
+                gen_fields.update(out.extra_fields)
+            elif out.extra_fields.get("max_global_steps"):
+                gen_fields["max_global_steps"] = out.extra_fields["max_global_steps"]
             return out.token_ids, out.log_probs
 
         def parse(ids):
@@ -86,19 +101,25 @@ class BrownoutAgentLoop(AgentLoopBase):
             max_tokens_per_turn=int(os.environ.get("BROWNOUT_TOKENS_PER_TURN", 4096)))
 
         max_turns = int(os.environ.get("BROWNOUT_MAX_TURNS", 20))
-        traj = await asyncio.to_thread(
+        traj = await loop.run_in_executor(_EPISODES, functools.partial(
             run_episode, env, task, model, max_turns=max_turns, verifier=verifier,
             temperature=sampling_params.get("temperature", 1.0),
-            limits=RolloutLimits(max_turns=max_turns))
+            limits=RolloutLimits(max_turns=max_turns)))
 
         save_dir = os.environ.get("BROWNOUT_SAVE_DIR")
         if save_dir:
-            # named by trace_id: the n samples of one task share task, model and group_id
+            # named by trace_id: the n samples of one task share task, model and group_id.
+            # train/ and val/ apart (the dataset row says which), so run_report can tell them apart
+            save_dir = os.path.join(save_dir, info.get("split", "unknown"))
             os.makedirs(save_dir, exist_ok=True)
-            write_json(os.path.join(save_dir, f"{traj.task_id}__{traj.trace_id}.json"), asdict(traj))
-        return self.to_output(model, traj, response_length)
+            path = os.path.join(save_dir, f"{traj.task_id}__{traj.trace_id}.json")
+            write_json(path, asdict(traj))
+            print(f"[brownout] saved {path} (cwd {os.getcwd()}, exists {os.path.exists(path)})", flush=True)
+        else:
+            print("[brownout] BROWNOUT_SAVE_DIR not set in this worker: episode not saved", flush=True)
+        return self.to_output(model, traj, response_length, gen_fields)
 
-    def to_output(self, model: TokenModel, traj, response_length: int) -> AgentLoopOutput:
+    def to_output(self, model: TokenModel, traj, response_length: int, gen_fields: dict) -> AgentLoopOutput:
         out = model.output() # we get prompt_ids, response_ids, response_masj, respose_logprobfs, reward_Score, num_turns, extra_fiels 
         context_full = any(e.type == ContextFull.__name__ for e in traj.errors)
         infra_failure = (not traj.grader.ok) or any(e.where == "model" and e.type != ContextFull.__name__ for e in traj.errors)
@@ -120,7 +141,8 @@ class BrownoutAgentLoop(AgentLoopBase):
             num_turns = traj.totals.get("turns", 0),
             metrics = AgentLoopMetrics(),
             extra_fields= {
-                 "jra": reward,
+                **gen_fields,                       # min/max_global_steps (and spec-decode stats)
+                "jra": reward,
                 "ended_by": traj.ended_by,
                 "submitted": bool(traj.final_state.get("submitted", False)),
                 "infra_failure": infra_failure,

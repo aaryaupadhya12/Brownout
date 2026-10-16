@@ -1,7 +1,11 @@
 """Chat-template renderers for TokenModel. No verl import, so it runs on a laptop."""
 
 # A fixed conversation to cut against: render(BASE + new) minus render(BASE) = new.
-_BASE = [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}]
+# It ends with a USER turn on purpose: templates like Qwen3 render the assistant turn after
+# the last user message differently (empty <think></think>) depending on whether it is the
+# last message, so an assistant-final BASE would not be a prefix of BASE + new.
+_BASE = [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"},
+         {"role": "user", "content": "z"}]
 
 
 def make_renderers(tokenizer, chat_kwargs: dict | None = None):
