@@ -54,6 +54,10 @@ The full guide, with the rules for each file and a checklist, is in
 | LLM judge | Criteria with ordered choices mapped to 0..1, fenced answer, temperature 0, cached; an unreadable verdict is a judge failure | `src/judge.py` |
 | Secrets | Config holds only variable names; values come from `.env` or the environment; errors name the variable, never the value | `src/providers.py` |
 | Cost | Token usage and price per episode | `src/pricing.py` |
+| Concurrency | `--concurrency N` runs N episodes at once | `src/run.py` |
+| Splits | Fixed train / val / test split per env, saved to a file so every run uses the same one | `src/splits.py`, `--split-file`, `--split` |
+| Training | GRPO with verl: each verl sample is one `run_episode`; LoRA on Modal H100s | `train/verl_bridge/` ([README](train/verl_bridge/README.md), [DEBUGGING](train/verl_bridge/DEBUGGING.md)) |
+| Environments | `brownout` (toy), `cloudops-boutique` (452 cases), `cloudops-boutique-code` (98 cases) | `src/envs/SystemEnv/` |
 
 ## How it compares: Verifiers, OpenEnv and Brownout
 
@@ -72,10 +76,12 @@ Brownout is a small harness, written from scratch to learn how RL environment fr
 | **Stop conditions / limits** | `@stop` hooks, `RolloutLimits` (turns, tokens), per-stage `RolloutTimeouts` | Left to the caller | `@stop` hooks and `RolloutLimits` (turns, total tokens, wall-clock seconds) |
 | **Failures** | Typed errors; a failed rollout is still data | Errors returned to the client | `ErrorRecord(where=model/env/scorer/harness)`; a crashed scorer marks the run `ok=False` rather than reward 0 |
 | **Comparable runs** | Results stored per run, resumable | Not covered | `task_hash` + `config_hash` → `group_id`; resumable with `--resume` |
-| **Concurrency** | Async throughout | Server-side, `SUPPORTS_CONCURRENT_SESSIONS` per env | Sequential; planned |
-| **Sandboxes** | Docker, Modal, E2B, Prime, Apptainer, subprocess runtimes | Several providers (uv, Docker, Modal, Daytona, HF...) | None yet: envs run in-process |
-| **Adapters to other ecosystems** | Harbor, OpenEnv, NeMo Gym, TextArena tasksets | Importers for other env formats | Planned: Cloud-OpsBench, OpenEnv envs from the HF Hub, a Miles agent function |
-| **Training** | prime-rl | None (env-only); used by trainers such as Miles | Planned: SGLang + Miles |
+| **Concurrency** | Async throughout | Server-side, `SUPPORTS_CONCURRENT_SESSIONS` per env | Episodes in parallel threads (`--concurrency`) |
+| **Sandboxes** | Docker, Modal, E2B, Prime, Apptainer, subprocess runtimes | Several providers (uv, Docker, Modal, Daytona, HF...) | None yet: envs run in-process; planned: local Docker, then Prime sandboxes |
+| **Adapters to other ecosystems** | Harbor, OpenEnv, NeMo Gym, TextArena tasksets | Importers for other env formats | Cloud-OpsBench (done); planned: OpenEnv envs from the HF Hub, MiMo RL envs |
+| **Training** | prime-rl | None (env-only); used by trainers such as Miles | verl GRPO (done); planned: SGLang + Miles |
+| **Grader hacking defenses** | Not a built-in step (as far as I found) | `Gate` rubrics; RFC 004 names "anti-hacking rubrics" but gives no design | Planned: a red-team audit that proves each exploit (see roadmap) |
+| **Grader false negatives** | Not covered | Not covered | Planned: perturbation tests (reword, reorder, harmless extras must keep the reward) |
 | **Size** | Large, production | Large, production | ~2,000 lines of Python, readable in an afternoon |
 
 **Where Brownout differs on purpose**
@@ -87,60 +93,175 @@ Brownout is a small harness, written from scratch to learn how RL environment fr
   mistaken for the model failing. That matters for RL, where the first means "drop the sample" and
   the second means "reward 0".
 
-**Where Brownout is behind:** no sandboxes, no concurrency, no trainer integration and no
-ecosystem adapters yet.
+**Where Brownout is behind:** no sandboxes, no async rollouts and few ecosystem adapters yet.
+
+**Where Brownout is heading:** none of the three frameworks checks whether its own graders can
+be gamed. OpenEnv offers `Gate` rubrics, and HUD sells an automated QA layer for this, but
+neither publishes a method that proves an exploit works. The next part of Brownout is that
+audit (see "Next" below).
+
+## Results so far: Cloud-OpsBench (Online Boutique)
+
+**Harness check against upstream.** Brownout's labels match upstream's `process-label/` for all
+550 cases, and grading follows upstream `evaluation.py` (rank 1 only, lowercase, collapsed
+whitespace; JRA = component and fault type both right). One known difference: upstream counts
+every tool call against its 20-step limit, while Brownout counts turns, and a turn can hold
+several tool calls. DeepSeek V4 Flash scores 0.859 JRA under Brownout's rule, and about 0.78 if
+episodes with 20 or more tool calls are counted as failures (an estimate, not a rerun).
+Upstream reports 0.76.
+
+**RL on Qwen3-4B** (GRPO with verl, LoRA r64, 40 steps, on the train split). Each model ran once
+on every task, greedy decoding, compared case by case (exact McNemar test):
+
+| Cases | Base | After RL | Cases fixed / broken | p |
+|---|---|---|---|---|
+| All non-code (452) | 0.235 | 0.332 | +89 / −45 | 0.0002 |
+| Never trained on: val + test (138) | 0.217 | 0.362 | +30 / −10 | 0.002 |
+| Trained on (314) | 0.242 | 0.318 | +59 / −35 | 0.017 |
+
+With the 98 code-defect cases included, base scores 0.195, close to upstream's Qwen3-8B (0.19),
+and the RL model scores 0.275, between upstream's Qwen3-8B and Qwen3-14B (0.41). The gains come
+from runtime, scheduling, service and startup faults. Admission, performance and code-defect
+cases did not improve. Every failure on the way, and its fix, is in
+[DEBUGGING.md](train/verl_bridge/DEBUGGING.md).
 
 ## Roadmap
 
 Each step has a concrete "done when", so progress is checkable from the repo.
 
-### Now: environments and metrics
+### Done
 
-1. **Training environments.** Write the first environments meant for training, not only for
-   evaluation.
-   *Done when:* each has a FakeModel test for a correct run, a different correct run and a wrong
-   run, and running 8 trials of one task at temperature > 0 gives rewards that are not all equal
-   (otherwise GRPO has nothing to learn from).
-2. **A shared metrics library.** Common `@metric` helpers any env can reuse, so the dashboard
-   can show the same columns across environments: turns, tool calls, invalid tool calls,
-   redundant (repeated) calls, tokens, cost, wall-clock time, `ended_by`.
-   *Done when:* an env gets these metrics by importing them, without writing them again, and
-   every saved trajectory reports them under the same names.
-3. **Cloud-OpsBench adapter** (`src/envs/SystemEnv/cloudops/`). 754 Kubernetes root-cause cases
-   (Online Boutique and Train-Ticket) with recorded tool outputs, so no live cluster is needed.
-   Outcome rewards: component, fault type and both (CA / FA / JRA); process metrics: milestone
-   coverage, evidence order, evidence efficiency, redundant actions.
-   *Done when:* scoring the benchmark's own reference trajectories (`golden-trajectory/`) with
-   Brownout's verifier gives the same numbers as the benchmark's `evaluation.py`.
+- **Cloud-OpsBench adapter** (`src/envs/SystemEnv/cloudops/`): Online Boutique, 550 cases with
+  recorded tool outputs, so no live cluster is needed. Reward JRA; CA, FA, redundant actions and
+  invalid submits as metrics.
+- **Concurrency** (`--concurrency`) and **fixed splits** (`--split-file`, `--split`).
+- **Baselines:** DeepSeek V4 Flash and Nemotron on every case, with cost.
+- **First RL run** with verl on Modal: Qwen3-4B, results above.
 
-### Next: scale
+### How the grader audit works (no GPU needed)
 
-4. **Concurrency.** Run 3-4 episodes at once, with per-provider rate limits.
-   *Done when:* a 50-case run finishes in about a quarter of the sequential time, with
-   identical saved results.
-5. **Config files.** Describe a benchmark run (env, models, trials, limits) in one file instead
-   of CLI flags. *Done when:* a run can be reproduced from its config file alone.
-6. **First baseline.** Cloud-OpsBench on 2-3 open models, with a fixed train/test split by case.
-   *Done when:* results are published with per-category scores and cost.
+An RL run only means something if its reward does. A grader can be wrong in two ways: it pays
+for an answer that did not solve the task (a false positive, which RL learns to exploit), or it
+refuses an answer that did (a false negative, which RL learns to avoid). Asking the grader cannot
+catch either, so every check needs a second source of truth:
 
-### Then: post-training
+| Second source | What it is |
+|---|---|
+| **Oracle** | An independent check, e.g. "did the trajectory contain evidence for this answer?" |
+| **Perturbation** | Change a correct answer in ways that should not matter; the reward must not move |
+| **Auditor** | A model reads the trajectory without seeing the reward and says whether it was solved |
 
-7. **SGLang serving.** Serve an open model with SGLang (single GPU, on Modal) and run the
-   benchmarks against it through the `sglang` provider.
-8. **Miles bridge.** Expose `run_episode` as a Miles agent function: a dropped sample (`None`)
-   for infrastructure failures, reward 0 for model failures.
+Every finding gets one tag, and counts only with a repro: a crafted input or a trajectory that
+gets the reward without solving the task, or a correct answer that loses it.
+
+| Tag | What fails | Examples |
+|---|---|---|
+| **LEAK** | The answer is reachable without doing the task | Answer files the tools can read, git history, build timestamps, network access |
+| **FALSE POSITIVE** | The grader pays for a non-solution | Shortcuts, inverse attacks (break the test so it passes), judge and rubric injection |
+| **FALSE NEGATIVE** | The grader refuses a real solution | Reworded answers, reordered steps, harmless extras, truncated evidence |
+| **CALIBRATION** | The task teaches RL nothing | Cases every model always solves, or never solves |
+
+The red team works in two modes:
+
+- **White-box** (finds exploits): agents read the env code, the grader and the task data, build
+  inputs that attack it, run the real grader on them, and report only the inputs that the grader
+  and the second source disagree on.
+- **Black-box** (checks they are reachable): agents get the same tools as the policy and a
+  prompt to maximise reward without solving the task. An exploit the policy can reach is rated
+  more severe than one it cannot.
+
+Every step below has a "done when". The order is deliberate: first make the audit structure
+concrete on three environments that need no containers, then learn containers, then add
+container environments, then train.
+
+### Step 1: the audit structure, on three environments without containers
+
+1. **Structure.** Audit checks live in their own module with their own decorators, separate from
+   the scoring decorators (`@reward` / `@metric` / `@stop`), so a grader and the checks against
+   it never share code. Each check produces findings in one format: tag, evidence (trajectory id
+   or crafted input), repro command, fix. A shared metrics library comes with it, so every env
+   reports turns, tool calls, invalid and redundant calls, tokens, cost, time and `ended_by` under
+   the same names.
+   *Done when:* the three audits below use the same decorators, the same finding format and the
+   same metrics, with no env-specific code in the audit module.
+2. **Cloud-OpsBench.** Shortcut (correct answers with no supporting evidence in the trajectory),
+   leak (can any tool read `metadata.json`?), false negatives (does `app/adservice` vs
+   `adservice` lose credit?), the turn-vs-tool-call budget, and calibration (cases that are
+   always 0 or always 1). It uses the ~1,100 DeepSeek and Nemotron trajectories already saved.
+3. **general-agent** (Prime Verifiers, 4,417 tasks; reward = exact final database hash or a
+   passing `verify(db)`). This needs a Verifiers adapter. The audit replays each task's gold
+   tool-call chain: as is (it must score 1, or the task is broken), then with a harmless read
+   added, independent calls reordered, and a harmless extra write. Any replay that loses the
+   reward is a false negative. No model calls needed.
+4. **math-env** (Prime Verifiers, single turn). Equivalent answer forms (fractions, decimals,
+   units, LaTeX) must keep the reward; wrong answers in a correct-looking format must not get it.
+   It is also the check that the adapter is faithful: scores must match Verifiers' own eval.
+
+*Done when (all of step 1):* a tagged report per env with a repro for every finding, and the
+fixes applied.
+
+### Step 2: containers
+
+5. **Docker, then Kubernetes basics.** A container runtime with four operations (start, exec,
+   copy files, stop), first through the local Docker CLI. Grading follows DeepSWE's design: the
+   agent works in one container, only a defined artifact (e.g. the committed diff) leaves it, and
+   a fresh container from the same pinned image runs the hidden checks, which are never in the
+   agent's container. No network in the agent's container.
+   *Done when:* a toy env runs through `run_episode` with `--concurrency 4` and leaves no
+   containers behind.
+6. **Prime sandboxes.** The same four operations on Prime's SDK (`network_allowlist=[]` for no
+   network, a run label on every sandbox so one `bulk_delete` cleans up after a crash).
+   *Done when:* the toy env gives the same results on Docker and on Prime.
+
+### Step 3: Harbor-format environments
+
+7. **DeepSWE** (DataCurve, 113 tasks, hidden tests in a pristine container), then **tau3**
+   (banking, 97 tasks, LLM-simulated customer, database + action + natural-language checks).
+   Both are added to the harness and audited with the step 1 structure. DeepSWE: patches that
+   change test configuration rather than code, and correct work lost because it was not
+   committed. tau3: an agent steering the simulated customer, and how often a task flips on
+   reruns.
+   *Done when:* 5 tasks of each run end to end on Prime, with their cost measured, before any
+   larger run.
+
+### Step 4: training
+
+8. **Miles + SGLang**, one backend for serving and training. Miles replays the rollout's MoE
+   routing during training (R3); NeMo-RL with Megatron is the alternative.
    *Done when:* a `--debug-rollout-only` Miles run produces rewards from a Brownout env.
-9. **First small RL run** on a budget (about $100 of GPU time), then a report comparing before
-   and after on the test split.
+9. **RLVR on corrected graders and traces.** Post-train on the audited environments: fixed
+   graders, and teacher traces filtered by the audit (no trajectory that scored through an
+   exploit).
+10. **VinePPO.** Per-step credit from Monte Carlo rollouts from intermediate states, compared with
+    GRPO on the same env.
 
-### Later
+### Last, before the write-ups
 
-- **More benchmarks:** ORCA (judge-scored), OpenEnv environments pulled from the HF Hub.
-- **Sandboxes:** a runtime for environments that execute code (coding and agentic tool tasks).
+11. **Broken vs fixed grader**, only if GPU credits allow: the same model trained on each with
+    the verl bridge, to show the reward climbing on the broken one while the audited solve rate
+    stays flat. Then 2-3 blog posts on the audit, the harness and the training results.
+
+### Other ideas (pushed down for now)
+
+Most of these are environments similar to the ones above; the ones above were picked because
+they are easier to start with.
+
+
+- **More audits:** MiMo's code, cyber, general and webdev graders; officeqa; LLM and chain-of-
+  thought monitors (for auditing only, never as reward: training against a monitor teaches the
+  model to hide what it does).
+- **Training environments:** FakeModel tests for every env, and 8 trials of a task at
+  temperature > 0 must not all score the same (otherwise GRPO has nothing to learn from).
+- **Config files** for runs.
+- **Cloud-OpsBench Train-Ticket** and the process metrics (milestone coverage, evidence order).
+- **More benchmarks:** ORCA, SRE-gym, OpenEnv environments pulled from the HF Hub.
 - **Prompt optimisation** with GEPA.
 - **Dashboard:** results for every environment and model on Hugging Face Spaces.
-- **Publishing:** a write-up comparing Verifiers, OpenEnv and Brownout, and models trained with
-  this harness published with model cards.
+- **Publishing:** four posts on Hugging Face, each linking to the next: (1) the harness and the
+  Cloud-OpsBench RL result, after its grader audit; (2) verifying environments: the grader
+  audits and what they mean for post-training; (3) Brownout, Verifiers and OpenEnv compared;
+  (4) the harness improving its own environments, and VinePPO vs GRPO on agents with RLVR.
+  Models trained with this harness published with model cards.
 - **Research directions:** combining small decision models with LLMs to lower GPU load, and RL
   training methods for MoE models.
 
