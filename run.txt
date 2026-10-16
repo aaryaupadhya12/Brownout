@@ -1,0 +1,39 @@
+episodes saved: 116  (/root/episodes/eval-qwen3-4b-step40-test -> /vol/runs/eval-qwen3-4b-step40-test-1016-0549)
+val-aux/num_turns/max':
+val-aux/num_turns/max:20
+val-aux/num_turns/mean':
+val-aux/num_turns/mean:7.5
+val-aux/num_turns/min':
+val-aux/num_turns/min:4
+val-core/cloudops-boutique-code/reward/mean@1':
+val-core/cloudops-boutique-code/reward/mean@1:0.0
+val-core/cloudops-boutique/reward/mean@1':
+val-core/cloudops-boutique/reward/mean@1:0.40625
+
+
+episodes saved: 116  (/root/episodes/eval-qwen3-4b-base-test -> /vol/runs/eval-qwen3-4b-base-test-1016-0603)
+val-aux/num_turns/max':
+val-aux/num_turns/max:20
+val-aux/num_turns/mean':
+val-aux/num_turns/mean:8.862068965517242
+val-aux/num_turns/min':
+val-aux/num_turns/min:4
+val-core/cloudops-boutique-code/reward/mean@1':
+val-core/cloudops-boutique-code/reward/mean@1:0.0
+val-core/cloudops-boutique/reward/mean@1':
+val-core/cloudops-boutique/reward/mean@1:0.23958333333333334
+
+
+Including coding tasks 
+episodes saved: 550  (/root/episodes/eval-qwen3-4b-step40-all -> /vol/runs/eval-qwen3-4b-step40-all-1016-0658)
+val-aux/num_turns/max':
+val-aux/num_turns/max:20
+val-aux/num_turns/mean':
+val-aux/num_turns/mean:7.958181818181818
+val-aux/num_turns/min':
+val-aux/num_turns/min:3
+val-core/cloudops-boutique-code/reward/mean@1':
+val-core/cloudops-boutique-code/reward/mean@1:0.01020408163265306
+val-core/cloudops-boutique/reward/mean@1':
+val-core/cloudops-boutique/reward/mean@1:0.33185840707964603
+

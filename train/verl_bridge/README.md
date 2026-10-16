@@ -23,6 +23,8 @@ verl trainer <───────────────┘   rollout.n = 4 s
 | `check_template.py` | Checks `renderers.py` against a real tokenizer | written |
 | `agent_loop.yaml`, `pilot.sh` | verl config + launch (smoke / pilot / full) | written; keys marked VERIFY |
 | `tests/token_model_test.py` | 11 tests for `TokenModel`, incl. a full Brownout episode | written |
+| `run_report.py` | Judge a run yourself: per-step metrics, episodes, GRPO group signal, PASS/WARN checks with fixes | written |
+| `modal_app.py`, `DEBUGGING.md` | Modal packaging; every bring-up error and how to read the next one | written |
 
 ## Steps
 
