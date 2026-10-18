@@ -54,6 +54,7 @@ class Verifier:
     def scorers(self, kind):
         """(name, bound method) for every method marked `kind`, in definition order.
         A subclass method with the same name replaces the parent's."""
+        # Prases through the Inheritance chain first to get the base class and then reverses it so in the class the first cls will b e the base classw not the parent class of the object 
         found = {}
         for cls in reversed(type(self).__mro__):
             for attr_name, value in vars(cls).items():
