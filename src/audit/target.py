@@ -145,7 +145,7 @@ class CloudOpsTarget(Target):
 
     def answer_strings(self, task):
         answer = task.spec["answer"]
-        return [answer["root_cause"], answer["fault_object"]]
+        return [answer["root_cause"]]
 
     def malformed(self, task):
         return fake_trace(task, {
