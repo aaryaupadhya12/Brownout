@@ -37,3 +37,45 @@ val-core/cloudops-boutique-code/reward/mean@1:0.01020408163265306
 val-core/cloudops-boutique/reward/mean@1':
 val-core/cloudops-boutique/reward/mean@1:0.33185840707964603
 
+
+
+python -m src.audit.swarm cloudops-boutique `
+  --campaign boutique-planted-substring-v1 `
+  --provider nebius `
+  --model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B `
+  --solver-model deepseek-ai/DeepSeek-V4-Flash-0731 `
+  --planted substring `
+  --limit 3
+
+
+python -m src.audit.swarm cloudops-boutique `
+  --campaign boutique-planted-substring-v1 `
+  --provider nebius `
+  --model nvidia/Nemotron-3_5-Lightning `
+  --solver-model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B `
+  --planted substring `
+  --limit 3
+
+  $campaign = "substring-swarm-" + (Get-Date -Format "MMdd-HHmm")
+echo $campaign
+
+python -m src.audit.swarm cloudops-boutique `
+  --campaign $campaign `
+  --provider nebius `
+  --model zai-org/GLM-5.3-Flash `
+  --solver-model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B `
+  --planted substring `
+  --limit 3 --max-rounds 1 --attempts 1 `
+  --specialists generic,answer-format,episode-end --workers 3
+
+  python -m src.audit.swarm cloudops-boutique `
+  --campaign $campaign `
+  --provider nebius `
+  --model zai-org/GLM-5.3-Flash `
+  --solver-model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B `
+  --planted substring `
+  --tasks boutique-admission-1 `
+  --max-rounds 1 --attempts 2 `
+  --specialists answer-format --workers 4
+
+  real-cloudops-1021-0944

@@ -23,6 +23,8 @@ def fake_trace(task, final_state, steps=None) -> Trajectory:
 class Target:
     name = "target"
     reward_range = (0.0, 1.0)
+    normal_endings = ("submit",)   # Trajectory.ended_by values that mean a normal finish
+    submit_tool = "Submit"         # the tool whose call hands in the answer
 
     def tasks(self):
         raise NotImplementedError
@@ -60,6 +62,10 @@ class Target:
         """Saved trajectories for this env (calibration, leak-in-observations)."""
         return None
 
+    def answer_key(self,task):
+        """ Hashable, equal if 2 tasks are the correct answer, None if many answers are coirrect"""
+        return None
+
     # --- layer 2 ---
 
     def judge(self):
@@ -77,14 +83,16 @@ class CloudOpsTarget(Target):
         from src.registry import get
         return list(get(self.name).tasks().load())
 
-    def grade(self, task, trace):
+    def __init__(self, verifier=None):
+        """verifier: the one to audit (e.g. a patch under review). None = CloudOpsVerifier()."""
         from ..envs.SystemEnv.cloudops.verifier import CloudOpsVerifier
-        return CloudOpsVerifier().score(task, trace)
+        self.verifier = verifier or CloudOpsVerifier()
+
+    def grade(self, task, trace):
+        return self.verifier.score(task, trace)
 
     def grader_name(self) -> str:
-        from ..envs.SystemEnv.cloudops.verifier import CloudOpsVerifier
-        verifier = CloudOpsVerifier()
-        return f"{verifier.name}-{verifier.version}"
+        return f"{self.verifier.name}-{self.verifier.version}"
 
     def gold(self, task):
         answer = task.spec["answer"]
@@ -101,7 +109,10 @@ class CloudOpsTarget(Target):
 
         return fake_trace(task, {"submitted": True, "submission": submission})
 
-        
+    def answer_key(self,task):
+        from ..envs.SystemEnv.cloudops.verifier import normalize
+        answer = task.spec["answer"]
+        return (normalize(answer["fault_object"]), normalize(answer["root_cause"]))
 
     def floor(self, task):
         return fake_trace(task, {"submitted": False})
