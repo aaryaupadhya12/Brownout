@@ -6,6 +6,41 @@ auditing whether their rewards can be earned without solving the task. Results b
 How it fits together, with every command: [Docs/SYSTEM.md](Docs/SYSTEM.md). How to run it and add
 environments: [Docs/HARNESS.md](Docs/HARNESS.md). Plans: [Docs/ROADMAP.md](Docs/ROADMAP.md).
 
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph ENV["Environment: one folder under src/envs/"]
+        T["tasks.py<br/>answer in task.spec"]
+        E["env.py<br/>tools + snapshot()"]
+        V["verifier.py<br/>@reward @metric @stop"]
+    end
+    M["Model client"] --> H["run_episode<br/>src/harness.py"]
+    T --> H
+    E --> H
+    V -->|"reads only task + trace"| H
+    H -->|"trajectory"| R[("runs/<br/>saved records")]
+    R --> REP["report.py<br/>results tables"]
+    R --> S["strict verifier<br/>re-grade offline"]
+    S --> J["LLM judges +<br/>expert-path control"]
+    J --> F["findings/"]
+    H --> SW["swarm<br/>attacker vs 2 referees"]
+    H --> TR["verl GRPO<br/>1 sample = 1 episode"]
+```
+
+The verifier never touches the environment, so any saved run can be scored again by a new
+verifier, offline and for free. That is what made the audit below possible.
+
+```powershell
+python -m unittest discover -s tests -p "*_test*.py"                                # all offline
+python -m src.run cloudops-boutique --provider nebius --model <id> --concurrency 8   # paid
+python -m src.report runs --filter boutique                                         # free
+python -m src.envs.SystemEnv.cloudops.regrade_strict                                # free
+```
+
+Every command, free or paid, with diagrams of one episode, the audit and the swarm:
+[Docs/SYSTEM.md](Docs/SYSTEM.md).
+
 ## Cloud-OpsBench (Online Boutique)
 
 **Harness check against upstream.** Brownout's labels match upstream's `process-label/` for all
@@ -42,6 +77,19 @@ labels"), using a port of upstream's milestone matcher that reproduces upstream'
 |---|---|---|---|---|
 | Nemotron-3-Nano-30B | 0.586 | 0.424 | **89 of 322 (27.6%)** | 23.0%–32.8% |
 | DeepSeek-V4-Flash | 0.859 | 0.859 | **0 of 468** | 0%–0.8% |
+
+```mermaid
+flowchart LR
+    R[("1,095 saved runs")] --> JRA["JRA<br/>right answer?"]
+    R --> ST["strict<br/>right answer AND<br/>the label's evidence?"]
+    L[("benchmark process labels")] --> ST
+    JRA --> G{"JRA 1<br/>strict 0?"}
+    ST --> G
+    G -->|yes| U["unconfirmed pass<br/>Nemotron 89, DeepSeek 0"]
+    U --> C1["2 LLM judges:<br/>false alarms?"]
+    ST --> C2["rescued runs +<br/>negative control:<br/>misses?"]
+    X[("1,508 expert paths")] --> C3["do experts<br/>pass strict?"]
+```
 
 Typical case (`boutique-scheduling-101`): the model describes the stuck pod, reads
 "didn't match Pod's node affinity/selector", and answers `node_selector_mismatch` without ever
