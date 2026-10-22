@@ -53,8 +53,10 @@ class OpenAICompatClient(ModelClient):
         while True:
             start = time.perf_counter()
             try:
+                # some servers (vLLM behind Nebius gpt-oss) reject tools=[]: omit the field instead
                 resp = self.client.chat.completions.create(
-                    model=self.model_id, messages=messages, tools=tools, temperature=temperature)
+                    model=self.model_id, messages=messages, temperature=temperature,
+                    **({"tools": tools} if tools else {}))
                 break
             except RateLimitError:
                 attempt = attempt + 1
