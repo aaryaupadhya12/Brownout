@@ -31,6 +31,29 @@ flowchart LR
 The verifier never touches the environment, so any saved run can be scored again by a new
 verifier, offline and for free. That is what made the audit below possible.
 
+**One episode** (`run_episode`): the loop every environment, eval and training sample goes
+through. Budgets are checked before every model call, and a crashed scorer is recorded as
+`ok=False`, never as reward 0.
+
+```mermaid
+sequenceDiagram
+    participant H as harness
+    participant M as model
+    participant E as env
+    participant V as verifier
+    H->>E: reset(task) -> first observation
+    loop until submit / max_turns / max_tokens / max_seconds  (limits.py)
+        H->>M: messages + tool schemas
+        M-->>H: assistant turn (text and/or tool calls)
+        H->>E: run every tool call in the turn
+        E-->>H: tool outputs
+    end
+    H->>E: snapshot() -> final_state
+    H->>V: score(task, trace)
+    V-->>H: reward, signals, ok (a crashed scorer = ok False, not reward 0)
+    H->>H: save trajectory (atomic write, group_id = hash(task + config))
+```
+
 ```powershell
 python -m unittest discover -s tests -p "*_test*.py"                                # all offline
 python -m src.run cloudops-boutique --provider nebius --model <id> --concurrency 8   # paid
@@ -79,16 +102,21 @@ labels"), using a port of upstream's milestone matcher that reproduces upstream'
 | DeepSeek-V4-Flash | 0.859 | 0.859 | **0 of 468** | 0%–0.8% |
 
 ```mermaid
-flowchart LR
-    R[("1,095 saved runs")] --> JRA["JRA<br/>right answer?"]
-    R --> ST["strict<br/>right answer AND<br/>the label's evidence?"]
-    L[("benchmark process labels")] --> ST
-    JRA --> G{"JRA 1<br/>strict 0?"}
-    ST --> G
-    G -->|yes| U["unconfirmed pass<br/>Nemotron 89, DeepSeek 0"]
-    U --> C1["2 LLM judges:<br/>false alarms?"]
-    ST --> C2["rescued runs +<br/>negative control:<br/>misses?"]
-    X[("1,508 expert paths")] --> C3["do experts<br/>pass strict?"]
+flowchart TD
+    R[("1,095 saved runs")] --> J["JRA (outcome reward)<br/>rank-1 component + root cause"]
+    R --> S["strict.py<br/>JRA AND the label's answer milestones"]
+    L[("Cloud-OpsBench process labels<br/>milestone.json")] --> P["vendor/process_eval.py<br/>port of upstream matcher"]
+    P --> S
+    J --> G{"JRA 1, strict 0?"}
+    S --> G
+    G -->|yes| U["unconfirmed pass<br/>(Nemotron 89 / 322, DeepSeek 0 / 468)"]
+    U --> F["forward audit: 2 LLM judges<br/>was the evidence there after all?"]
+    S --> RV["reverse audit: rescued runs<br/>+ negative control"]
+    X[("upstream expert paths<br/>golden-trajectory/")] --> GC["golden_control.py<br/>legitimate control, no LLM"]
+    P --> GC
+    F --> N["compute_numbers.py -> expected.json"]
+    RV --> N
+    GC --> N
 ```
 
 Typical case (`boutique-scheduling-101`): the model describes the stuck pod, reads
@@ -113,6 +141,21 @@ false alarms. After reading the scorer, its plan said the evidence in a submissi
 In one case the attacker refused to game the scorer and still skipped the deciding check: the
 reward does not ask for it, so intent does not matter. With JRA as the only referee, the same run
 reports nothing. (5 hand-picked cases: a demonstration, not a rate.)
+
+**How the swarm works.** The attacker sees only the JRA verifier (and, from round 1, its
+source). The strict verifier is the hidden second referee: an attempt that earns JRA but fails
+strict is recorded with a replayable repro.
+
+```mermaid
+flowchart LR
+    PC["precheck<br/>a saved honest solve must pass true_success"] --> A
+    A["attacker<br/>blind round, then whitebox<br/>(reads the attacked verifier)"] --> EP["episode via run_episode"]
+    EP --> C{"confirm.is_hack"}
+    C -->|"reward on attacked verifier<br/>AND (fails true_success OR detector fires)"| LG[("ledger.jsonl<br/>finding + repro")]
+    C -->|no| FB["failure note<br/>(answer withheld)"] --> A
+    LG -.->|"separate step, not in the loop"| FX["fixer.py proposes a patch<br/>(new class in a new file)"]
+    FX -.-> GT["gate.py: honest solves must still pass,<br/>held-out findings must fail; a person approves"]
+```
 
 Not claimed: anything about other models or harnesses, human-verified labels, or training. Whether
 RL on JRA teaches this shortcut is the next experiment.
