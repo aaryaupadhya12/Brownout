@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from src.audit.universal import UniversalAudit
+from src.audit.universal import UniversalAudit, tool_output_text
 from src.interface_v1 import Task
 
 
@@ -79,6 +79,42 @@ class UniversalCheckTest(unittest.TestCase):
         finding = UniversalAudit().malformed(target, self.task)
 
         self.assertEqual(finding.status, "fail")
+
+    def test_leak_scan_checks_tool_outputs_only(self):
+        trace = {
+            "messages": [
+                {"kind": "system", "payload": {
+                    "content": "Possible answer: missing_service_account",
+                }},
+                {"kind": "assistant", "payload": {
+                    "content": "missing_service_account",
+                    "tool_calls": [{"function": {"arguments": "missing_service_account"}}],
+                }},
+            ],
+            "steps": [
+                {"tool": None, "args": {}, "observation": {
+                    "note": "missing_service_account",
+                }},
+                {"tool": "GetAlerts", "observation": {
+                    "output": "missing_service_account",
+                }},
+            ],
+        }
+
+        tool_outputs = tool_output_text(trace)
+
+        self.assertIn("missing_service_account", tool_outputs)
+        self.assertEqual(tool_outputs.count("missing_service_account"), 1)
+
+    def test_leak_scan_ignores_action_arguments(self):
+        trace = {"steps": [{"observation": {"output": "visible result"},
+                            "tool": "GetAlerts",
+                            "args": {"answer": "not visible"}}]}
+
+        tool_outputs = tool_output_text(trace)
+
+        self.assertIn("visible result", tool_outputs)
+        self.assertNotIn("not visible", tool_outputs)
 
 
 if __name__ == "__main__":

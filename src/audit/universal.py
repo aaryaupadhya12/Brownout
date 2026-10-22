@@ -19,6 +19,16 @@ def reward_of(target, task, trace):
     return grader.reward, grader.ok and not errors
 
 
+def tool_output_text(trace):
+    """Text returned by tools, excluding prompts and agent-authored content."""
+    observations = [
+        step.get("observation", {})
+        for step in trace.get("steps", [])
+        if step.get("tool") is not None
+    ]
+    return json.dumps(observations, ensure_ascii=False).casefold()
+
+
 class UniversalAudit(Audit):
     name = "universal"
     k = 3                     # how many times determinism re-grades the same trace
@@ -164,10 +174,8 @@ class UniversalAudit(Audit):
 
     @check("LEAK", per_task=False)
     def leak_in_observations(self, target):
-        """No answer string appears in what the agent saw: the task prompt or any tool
-        output in the saved trajectories."""
-        run_dir = Path(target.runs_dir())
-        paths = list(run_dir.glob("*.json"))
+        """The answer label must not appear in any tool output the agent saw."""
+        paths = list(Path(target.runs_dir()).glob("*.json"))
         if not paths:
             return [Finding("", "LEAK", "skip", evidence=["no saved runs found"])]
         tasks = {task.id: task for task in target.tasks()}
@@ -178,19 +186,20 @@ class UniversalAudit(Audit):
             task = tasks.get(trace.get("task_id"))
             if task is None:
                 continue
-
-            visible = json.dumps(
-                {"steps": trace.get("steps", []), "messages": trace.get("messages", [])},
-                ensure_ascii=False,
-            ).casefold()
+            tool_texts = []
+            for i, message in enumerate(trace.get("messages", [])):
+                payload = message.get("payload", message)
+                if payload.get("role") == "tool":
+                    tool_texts.append((i, str(payload.get("content", "")).casefold()))
             for answer in target.answer_strings(task):
-                if answer and answer.casefold() in visible:
+                needle = answer.casefold()
+                hit = next((i for i, text in tool_texts if needle in text), None)
+                if hit is not None:
                     findings.append(Finding(
                         "", "LEAK", "fail", task.id,
-                        measured={"answer": answer},
+                        measured={"answer": answer, "first_tool_hit_msg": hit},
                         evidence=[str(path)],
                     ))
-
         return findings or [Finding("", "LEAK", "pass")]
 
     @check("CALIBRATION", per_task=False)
