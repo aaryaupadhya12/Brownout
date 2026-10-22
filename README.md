@@ -125,6 +125,39 @@ from runtime, scheduling, service and startup faults. Admission, performance and
 cases did not improve. Every failure on the way, and its fix, is in
 [DEBUGGING.md](train/verl_bridge/DEBUGGING.md).
 
+### Grader audit: JRA pays for diagnoses the model never confirmed
+
+JRA checks only the final answer. A stricter verifier (`strict.py`) also requires the evidence
+that Cloud-OpsBench's own process labels list for the case (e.g. "list the nodes with their
+labels"), using a port of upstream's milestone matcher that reproduces upstream's evaluator on all
+1,508 expert trajectories. Re-graded over the 1,095 saved runs (saved runs untouched):
+
+| Model | JRA | Strict | Correct answers never confirmed | 95% CI |
+|---|---|---|---|---|
+| Nemotron-3-Nano-30B | 0.586 | 0.424 | **89 of 322 (27.6%)** | 23.0%–32.8% |
+| DeepSeek-V4-Flash | 0.859 | 0.859 | **0 of 468** | 0%–0.8% |
+
+Typical case (`boutique-scheduling-101`): the model describes the stuck pod, reads
+"didn't match Pod's node affinity/selector", and answers `node_selector_mismatch` without ever
+listing the nodes' labels. The answer is right, so JRA pays 1; the strict verifier pays 0. Both
+of the benchmark's expert paths for this case do list the labels.
+
+How the strict verifier was checked (details and every number reproducible in the findings folder):
+- **False alarms:** two LLM judges from different families read all 89 cases; they agree on 0
+  cases where the evidence was there after all (CI 0–4.5%).
+- **Misses:** all 73 runs rescued by its two documented rule changes confirmed (CI 0–5%), and a
+  negative control of 12 cases where the rules would be wrong was rejected 12 of 12.
+- **Legitimate control (no LLM):** in 80 of the 89 cases every expert path passes the same check,
+  so the skipped step is one the benchmark's own experts take.
+- **Side finding on the benchmark:** its labels reject 151 of 1,100 boutique expert paths; 111 of
+  those use a pod or replicaset description as the config evidence, which the labels do not accept.
+
+Not claimed: anything about other models or harnesses, human-verified labels, or training. Whether
+RL on JRA teaches this shortcut is the next experiment.
+Write-up: [findings/cloudops-unconfirmed-passes/](findings/cloudops-unconfirmed-passes/README.md).
+Method and decisions: [Docs/STRICT_VERIFIER.md](Docs/STRICT_VERIFIER.md); every change in order:
+[Docs/STRICT_AUDIT_CHANGELOG.md](Docs/STRICT_AUDIT_CHANGELOG.md).
+
 ## Roadmap
 
 Each step has a concrete "done when", so progress is checkable from the repo.
@@ -137,6 +170,10 @@ Each step has a concrete "done when", so progress is checkable from the repo.
 - **Concurrency** (`--concurrency`) and **fixed splits** (`--split-file`, `--split`).
 - **Baselines:** DeepSeek V4 Flash and Nemotron on every case, with cost.
 - **First RL run** with verl on Modal: Qwen3-4B, results above.
+- **Strict true-success verifier for Cloud-OpsBench** (`src/envs/SystemEnv/cloudops/strict.py`,
+  `vendor/process_eval.py`): JRA plus the label's evidence; audited in both directions and
+  against upstream's expert trajectories (`golden_control.py`). A measuring stick, not a training
+  reward. Results above.
 
 ### How the grader audit works (no GPU needed)
 
@@ -188,6 +225,7 @@ container environments, then train.
    leak (can any tool read `metadata.json`?), false negatives (does `app/adservice` vs
    `adservice` lose credit?), the turn-vs-tool-call budget, and calibration (cases that are
    always 0 or always 1). It uses the ~1,100 DeepSeek and Nemotron trajectories already saved.
+   *Shortcut part done:* see "Grader audit" above (89 of 322 Nemotron hits unconfirmed).
 3. **general-agent** (Prime Verifiers, 4,417 tasks; reward = exact final database hash or a
    passing `verify(db)`). This needs a Verifiers adapter. The audit replays each task's gold
    tool-call chain: as is (it must score 1, or the task is broken), then with a harmless read
