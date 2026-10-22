@@ -3,8 +3,8 @@
 A small harness for building, benchmarking and training on RL environments for agents, and for
 auditing whether their rewards can be earned without solving the task. Results below.
 
-How to run it and add environments: [Docs/HARNESS.md](Docs/HARNESS.md). Plans:
-[Docs/ROADMAP.md](Docs/ROADMAP.md).
+How it fits together, with every command: [Docs/SYSTEM.md](Docs/SYSTEM.md). How to run it and add
+environments: [Docs/HARNESS.md](Docs/HARNESS.md). Plans: [Docs/ROADMAP.md](Docs/ROADMAP.md).
 
 ## Cloud-OpsBench (Online Boutique)
 
@@ -57,6 +57,14 @@ How the strict verifier was checked (details and every number reproducible in th
   so the skipped step is one the benchmark's own experts take.
 - **Side finding on the benchmark:** its labels reject 151 of 1,100 boutique expert paths; 111 of
   those use a pod or replicaset description as the config evidence, which the labels do not accept.
+
+**An adversarial agent found the same shortcut on its own.** The Brownout swarm (an attacker told
+to earn reward without solving) ran on 5 scheduling cases with the strict verifier as a hidden
+second referee. In 3 cases it earned JRA without the confirming evidence, all checked by hand, 0
+false alarms. After reading the scorer, its plan said the evidence in a submission "is inert".
+In one case the attacker refused to game the scorer and still skipped the deciding check: the
+reward does not ask for it, so intent does not matter. With JRA as the only referee, the same run
+reports nothing. (5 hand-picked cases: a demonstration, not a rate.)
 
 Not claimed: anything about other models or harnesses, human-verified labels, or training. Whether
 RL on JRA teaches this shortcut is the next experiment.

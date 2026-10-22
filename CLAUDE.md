@@ -43,7 +43,8 @@ submission}, totals, tracking, config (includes the full system prompt and tool 
 - The submission is `final_state.submission.top_3_predictions`; grading uses rank 1 only.
 - Known harmless: `final_state.tool_calls` excludes Submit while `grader.signals.tool_calls` includes it.
 - Known to fix: version labels disagree (`versions.grader` 0.2.0 vs `grader.grader_version` and
-  `tracking.verifier.version` 0.1.0), and some runs came from a dirty commit.
+  `tracking.verifier.version` 0.1.0; see Current status for why it waits), and some runs came from a
+  dirty commit.
 
 ## Token-saving rules
 - Read this file first. Do not re-scan the whole repo. Find things with grep (`class UniversalAudit`,
@@ -56,12 +57,19 @@ submission}, totals, tracking, config (includes the full system prompt and tool 
 - Make small diffs, show them, and stop. Ask before changing a grader or verifier.
 - Reports: short. Say what you changed, what you ran, and what you did not verify.
 
-## Current status
-- Layer 1 (`universal`) and Layer 2 (`judge`) audits exist. Layer 2 skips: no judge is wired in yet,
-  and it has known bugs.
-- `leak_in_observations` over-reports (about 939 fails, roughly one per run) because it scans the prompt
-  and the agent's own turns. Fix: tool-role messages only.
+## Current status (2026-10-22)
+Map of the repo with commands: `Docs/SYSTEM.md`. Results: `README.md` and
+`findings/cloudops-unconfirmed-passes/`.
+- Built: the strict true-success verifier (`cloudops/strict.py`, measuring stick only, never a
+  training reward), its audit (`audit_judge.py`, `golden_control.py`), and the swarm orchestrator
+  (`src/audit/swarm/`, plain code) with planted holes and `--true-success strict`.
+- Layer 1 (`universal`) and Layer 2 (`judge`) audits exist. Layer 2 skips: no judge is wired in yet.
+- `leak_in_observations` is fixed: it scans tool-role messages only.
 - `universal.calibration` flags tasks where both saved runs got the same reward. It is a post-training
   prep list, not an audit failure.
-- Not built yet: the true-success verifier (cited evidence required), the planted-holes env copy,
-  and the orchestrator.
+- Version labels still disagree (`contracts.VERSIONS["grader"]` 0.2.0 vs `CloudOpsVerifier.version`
+  0.1.0). Deliberately not fixed yet: `strict_sha` hashes `verifier.py`, so editing it changes the
+  pinned measuring stick `strict-6f0952b5`. Fix it together with the next planned verifier change.
+- Next: whether RL on JRA teaches the unconfirmed-pass shortcut (pre-register first).
+- The user is preparing for interviews and re-coding components to learn them: prefer teaching,
+  quizzing and reviewing their code over writing core code (see `interview/08_recode_plan.md`).

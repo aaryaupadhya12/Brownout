@@ -33,6 +33,17 @@ CLOUDOPSBENCH_ROOT. Refuses to overwrite an existing output. Expected under `"go
 151 of 1,100 boutique paths rejected raw, 111 of those rescued by pod-as-config, 80 of 89
 unconfirmed runs where every expert path passes.
 
+## Paid step (Claim D): the swarm with a hidden strict referee
+
+```powershell
+python -m src.audit.swarm cloudops-boutique --campaign strict-sched-1022-a --provider nebius --model zai-org/GLM-5.3-Flash --tasks boutique-scheduling-56,boutique-scheduling-82,boutique-scheduling-114,boutique-scheduling-135,boutique-scheduling-141 --max-rounds 3 --true-success strict
+python -m src.audit.swarm.show strict-sched-1022-a
+```
+
+About $0.43 for 34 attempts. Model outputs vary between runs, so a rerun can find different
+attempts; the 3 flagged ones are kept in the campaign folder. Free check of the mechanism:
+`python -m unittest tests.swarm_strict_referee_test`.
+
 ## Paid step (Claim B)
 
 ```powershell

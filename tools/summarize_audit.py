@@ -6,7 +6,7 @@ from pathlib import Path
 
 def main():
     if len(sys.argv) != 2:
-        raise SystemExit("Usage: python summarize_audit.py <audit-report.json>")
+        raise SystemExit("Usage: python -m tools.summarize_audit <audit-report.json>")
 
     path = Path(sys.argv[1])
     with path.open(encoding="utf-8") as file:

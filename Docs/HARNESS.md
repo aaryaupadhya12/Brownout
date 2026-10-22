@@ -1,7 +1,8 @@
 # Brownout: the harness
 
 How to run it, how to add an environment, what exists, and how it compares.
-Results are in the [main README](../README.md); plans in [ROADMAP.md](ROADMAP.md).
+Results are in the [main README](../README.md); plans in [ROADMAP.md](ROADMAP.md); a one-page map
+with diagrams and every command in [SYSTEM.md](SYSTEM.md).
 
 ## Quickstart
 

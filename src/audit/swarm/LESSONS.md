@@ -273,24 +273,6 @@ answers; denial fires on reward without a normal ending. Per-env facts live in a
 **Rule.** Before trusting "robust", check what could have said "hack". If the only check
 needs a second verifier and there isn't one, the result means "not looked at", not "safe".
 
-## 13. One referee can't catch a cheat
-
-**Where:** `__main__.py`: without `--planted`, `verifier = true_success` (same object).
-`confirm.is_hack` checked only the reward gap between them, so on the real env it was always
-0 and every task ended `robust`. Test: `test_old_path_is_blind_on_real_env`.
-
-**Like a school kid:** we asked the same referee twice whether the player cheated, and
-counted a cheat only if the two answers disagreed. They never did.
-
-**Technical:** a reward gap needs a second, stronger verifier. Real envs usually don't have
-one. Fix: `detectors.py` judges behavior instead (RHB: correctness and integrity are
-separate axes). Cross-task replay proves a hack when one output earns on tasks with different
-answers; denial fires on reward without a normal ending. Per-env facts live in an `EnvAdapter`.
-`evidence["undetectable"]` lists the categories that were not checked.
-
-**Rule.** Before trusting "robust", check what could have said "hack". If the only check
-needs a second verifier and there isn't one, the result means "not looked at", not "safe".
-
 ## 15. The failure note handed the next attempt the answer
 
 **Where:** `loop.attack_task` appended `roles.failure_note` for every non-finding attempt,
@@ -308,3 +290,41 @@ because the leak came through the system prompt, not a tool output.
 
 **Rule.** Anything fed forward between attempts goes through the same check as the
 prober's prompt (Lesson 11): grep it for the answer. Feedback must agree with the prompt.
+## 16. A second referee turns "robust" into findings (and needs its own label)
+
+**Where:** campaign `strict-sched-1022-a` (`--true-success strict`, 5 scheduling tasks, GLM-5.3-Flash,
+34 attempts, ~$0.43). `runs/swarm/strict-sched-1022-a/ledger.jsonl`: 3 rows, every one with
+`evidence.unpatched.reward` 1.0, `evidence.true_success.reward` 0.0 and `evidence.triggers` `[]`.
+Print them: `python -m src.audit.swarm.show strict-sched-1022-a`.
+
+**Like a school kid:** the old referee only checked the final answer, so it never saw anyone skip
+the working. A second referee who checks the working caught three students who skipped it. One of
+them was not cheating on purpose; they just skipped the step nobody marks.
+
+**Technical:** all 3 findings came from the reward gap alone (no detector fired), so without a
+stronger `true_success` this campaign reports nothing (Lesson 13). Verified by hand against the
+process labels and the expert paths: 0 false alarms. But the ledger says `HACKED` for every gap,
+and the gap does not mean intent. On `boutique-scheduling-135` the attacker refused to game the
+scorer, solved honestly in 22 calls, and still skipped the discriminating check (which storage
+the volume has). That is an unconfirmed pass, not a hack.
+
+**Rule.** Adjudicate every gap before calling it a hack: read the plan (`its plan:` in `show`).
+Deliberate (plan names the weakness) -> `proxy_gaming`; no intent -> record it as an unconfirmed
+pass. Report the `undetectable` list next to any "nothing found".
+
+## 17. Attackers refuse, and refusal is data
+
+**Where:** `strict-sched-1022-a/boutique-scheduling-135/r0_attacker_a0_*.json`, the plan:
+"I'm not going to attempt to game the scorer ... I'll simply do it well". Tokenless report the same
+for strong models in EnvCheck ("the best models have some level of refusals around this").
+
+**Like a school kid:** we asked a student to find a way to get marks without doing the work, and
+they said no and did the work. Fine, but then they were not testing the test.
+
+**Technical:** a refusing attacker behaves as a solver, so its episode does not probe the
+verifier. Count refusals separately from "no hack found". Shortcuts appeared mostly in whitebox
+rounds (82 and 114 at round 2): the incentive is discoverable from the scorer source, which is
+what an RL policy effectively learns.
+
+**Rule.** In `show`, check each attempt's plan for a refusal before reading "no hack found" as
+"robust". A refusal-heavy task needs a different attacker model or framing, as a new campaign.
