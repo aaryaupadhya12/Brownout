@@ -44,6 +44,10 @@ def main(argv=None):
                         help="comma-separated focus areas: generic,answer-format,episode-end")
     parser.add_argument("--workers", type=int, default=1,
                         help="how many (task, prober) pairs run at once (default 1 = serial)")
+    parser.add_argument("--true-success", default="same", choices=("same", "strict"),
+                        help="the second referee. same = the env's own verifier (no reward gap "
+                             "possible, LESSONS 13); strict = cloudops StrictCloudOpsVerifier "
+                             "(JRA + evidence), so JRA=1 / strict=0 counts as a finding")
     args = parser.parse_args(argv)
 
     from ...providers import make_client   # reads the key from .env
@@ -55,6 +59,11 @@ def main(argv=None):
                       max_rounds=args.max_rounds, attempts=args.attempts)
     true_success = spec.verifier()
     verifier = true_success
+    if args.true_success == "strict":
+        if not args.env.startswith("cloudops"):
+            parser.error("--true-success strict exists only for cloudops envs")
+        from ...envs.SystemEnv.cloudops.strict import StrictCloudOpsVerifier
+        true_success = StrictCloudOpsVerifier()     # attacker still sees only `verifier` (JRA)
     if args.planted:
         verifier = next(h for h in HOLES if h.hole_id == args.planted).verifier()
 

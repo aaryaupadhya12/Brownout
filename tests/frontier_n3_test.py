@@ -52,6 +52,9 @@ class N3Test(unittest.TestCase):
         for name, want in PREDICTIONS.items():
             self.assertAlmostEqual(self.scores[name], want, places=6, msg=name)
 
+    # Fails on purpose: it states the promise and FrontierSWE v1's scorer breaks it (store_only
+    # ties a failed run at 0.0). Marked so the suite stays green; "unexpected success" = fixed.
+    @unittest.expectedFailure
     def test_every_valid_run_ranks_above_a_failure(self):
         """The promise from instruction.md:31. If this fails, N3 is demonstrated at the scorer."""
         failed = self.scores["failed_round_trip"]
