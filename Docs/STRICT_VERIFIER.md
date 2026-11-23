@@ -58,7 +58,7 @@ answered correctly.
 
 **4.1 Not ECR.** ECR needs *every* milestone. Upstream's own table: Qwen3-14B ECR 0.45 with JRA 0.41;
 GPT-5 ECR 0.21 with JRA 0.68. ECR rises with the number of tool calls, not with correct diagnosis.
-Our runs show the same: DeepSeek makes about 2x the calls under our harness (Docs/ISSUES.md #1) and
+Our runs show the same: DeepSeek makes about 2x the calls under our harness and
 gets ECR 0.93 vs 0.38 upstream. ECR is kept as a metric.
 
 **4.2 Answer milestones = ends of the chain, not role names.** All 754 labels have 1 or 2 chain ends

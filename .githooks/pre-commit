@@ -1,0 +1,5 @@
+#!/bin/sh
+# Enforces Docs/SHIPPING.md. Enable once with: git config core.hooksPath .githooks
+PY=python
+[ -x .venv312/Scripts/python.exe ] && PY=.venv312/Scripts/python.exe
+exec "$PY" scripts/ship_check.py

@@ -130,9 +130,8 @@ Before any paid swarm run, read the checklist in `src/audit/swarm/LESSONS.md`.
 | `src/envs/SystemEnv/cloudops/` | Cloud-OpsBench adapter, strict verifier, audit scripts |
 | `src/envs/TextEnv/reverse_text/` | port of Prime Intellect's reverse-text (in progress: stubs + spec tests) |
 | `src/audit/` | Layer 1/2 audits, `frontier_target.py`, `swarm/` |
-| `src/dist/` | fault-tolerant distributed episode runner on a SQLite lease queue (in progress: stubs + spec tests) |
 | `train/verl_bridge/` | GRPO with verl; `DEBUGGING.md` has every failure and fix |
 | `findings/` | results packaged with `expected.json` and recompute scripts |
-| `Docs/` | `HARNESS.md` (how to use), `ROADMAP.md`, `STRICT_VERIFIER.md`, `STRICT_AUDIT_CHANGELOG.md`, `ISSUES.md`, `contracts.md`, `READING_LIST.md` |
+| `Docs/` | `STRICT_VERIFIER.md`, `STRICT_AUDIT_CHANGELOG.md`, `contracts.md` |
 | `tools/` | small read-only helpers |
 | `runs/` (git-ignored) | every saved trajectory, re-grade and swarm campaign |
