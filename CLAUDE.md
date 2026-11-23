@@ -31,6 +31,9 @@ A hack counts only with a runnable repro that earns reward on the unpatched env.
 - Batching several tool calls in one turn is intentional: Brownout counts turns, not tool calls. Do not flag it.
 - Saved runs in `runs/` are records. Never edit them. Re-grade into new files instead.
 - Keep it small and readable. No new dependencies without asking.
+- Every infrastructure file stays under 100 lines unless it truly needs more (say why). No unnecessary
+  code, no speculative abstractions, no error handling for cases that don't happen. Handle only real
+  failures that matter (an infra crash gives `grader.ok=False`).
 
 ## Trace format (do not cat whole trajectories: each is about 100 KB)
 Keys: task_id, model_id, steps[], messages[], calls[], grader{reward, ok, signals}, final_state{submitted,
@@ -73,3 +76,7 @@ Map of the repo with commands: `Docs/SYSTEM.md`. Results: `README.md` and
 - Next: whether RL on JRA teaches the unconfirmed-pass shortcut (pre-register first).
 - The user is preparing for interviews and re-coding components to learn them: prefer teaching,
   quizzing and reviewing their code over writing core code (see `interview/08_recode_plan.md`).
+## Shipping standard
+Every change and release follows `Docs/SHIPPING.md` (plan then run exactly the plan, dry-run by
+default, oracle=1 / nop=0 before and after env changes, budgets on every run, keys never in the
+repo). `scripts/ship_check.py` runs before every commit. Point out any step that is being skipped.

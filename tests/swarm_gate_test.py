@@ -1,9 +1,12 @@
 import unittest
+
+from swarm_strict_referee_test import have_data
 from src.audit.swarm import gate
 from src.audit.swarm.planted import HOLES, SubstringMatch
 from src.registry import get
 
 
+@unittest.skipUnless(have_data(), "set CLOUDOPSBENCH_ROOT to a Cloud-OpsBench checkout")
 class GateTest(unittest.TestCase):
     def setUp(self):
         self.tasks = list(get("cloudops-boutique").tasks().load())[:3]

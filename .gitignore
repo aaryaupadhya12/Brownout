@@ -441,3 +441,8 @@ data/
 
 # toy RL stack notes (M1-M7), local only
 /bin/
+.venv312/
+
+# Harbor job outputs and downloaded task datasets (795 MB): never commit
+jobs/
+lcb/

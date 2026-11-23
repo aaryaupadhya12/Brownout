@@ -1,6 +1,8 @@
 import tempfile
 import unittest
 
+from swarm_strict_referee_test import have_data
+
 from src.audit.swarm import fixer, gate
 from src.audit.swarm.identity import verifier_sha
 from src.audit.swarm.loop import SwarmConfig
@@ -48,6 +50,7 @@ class PlumbingTest(unittest.TestCase):
         self.assertEqual(fixer.extract_patch(text), "y = 2\n")
         self.assertIsNone(fixer.extract_patch("no code here"))
 
+    @unittest.skipUnless(have_data(), "set CLOUDOPSBENCH_ROOT to a Cloud-OpsBench checkout")
     def test_finding_text_drops_the_testers_opinion(self):
         text = fixer.describe_finding(a_row(tasks(1)[0]))
         self.assertNotIn("SECRET-OPINION", text)
@@ -68,6 +71,7 @@ class PlumbingTest(unittest.TestCase):
             self.assertEqual((a["text"], b["text"]), ("first", "first"))
             self.assertEqual(len(model.seen), 1)
 
+    @unittest.skipUnless(have_data(), "set CLOUDOPSBENCH_ROOT to a Cloud-OpsBench checkout")
     def test_held_out_excludes_the_same_trick(self):
         t = tasks(3)
         rows = [a_row(t[0]), a_row(t[1]), a_row(t[2])]
@@ -109,6 +113,7 @@ class YourCodeTest(unittest.TestCase):
         self.assertGreater(v.score(), bad.score())
         self.assertFalse(gate.PatchVerdict().ok())        # nothing held out: nothing proven
 
+    @unittest.skipUnless(have_data(), "set CLOUDOPSBENCH_ROOT to a Cloud-OpsBench checkout")
     def test_good_patch_is_better_and_the_holey_one_is_not(self):
         t = tasks(3)
         held = [HOLE.exploit(x) for x in t]
@@ -124,6 +129,7 @@ class YourCodeTest(unittest.TestCase):
         self.assertEqual(same.blocked, 0)
         self.assertFalse(same.ok())
 
+    @unittest.skipUnless(have_data(), "set CLOUDOPSBENCH_ROOT to a Cloud-OpsBench checkout")
     def test_fix_finding_end_to_end_with_a_scripted_fixer(self):
         t = tasks(3)
         unpatched = HOLE.verifier()

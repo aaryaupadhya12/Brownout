@@ -1,5 +1,7 @@
 import unittest
 
+from swarm_strict_referee_test import have_data
+
 from src.audit.swarm import confirm, detectors
 from src.audit.swarm.exploit import Exploit
 from src.audit.swarm.planted import HOLES, submission
@@ -22,6 +24,7 @@ def a_task():
     return next(iter(get(ENV).tasks().load()))
 
 
+@unittest.skipUnless(have_data(), "set CLOUDOPSBENCH_ROOT to a Cloud-OpsBench checkout")
 class DetectorTest(unittest.TestCase):
     def test_old_path_is_blind_on_real_env(self):
         """Documents the bug: verifier == true_success and no adapter -> never a hack."""
