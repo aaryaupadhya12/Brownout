@@ -9,7 +9,7 @@ from src.providers import load_env_file, load_providers, resolve
 
 PROVIDERS = {"nebius": {"base_url": "https://neb.example/v1", "api_key_env": "TEST_NEBIUS_KEY"},
              "local": {"base_url": "http://localhost:30000/v1", "api_key_env": ""}}
-SECRET = "sk-test-DO-NOT-LEAK-123"
+SECRET = "sk-test-DO-NOT-LEAK-123"  # fake key for the leak test (ship_check: allow)
 
 
 class TestResolve(unittest.TestCase):

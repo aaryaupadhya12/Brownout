@@ -1,7 +1,7 @@
 # Brownout
 
 An open RL environment harness that checks how an agent reached its answer, not only whether it
-was right. Built by one person; work in progress.
+was right. Built by one person; work in progress. Version `0.1.0a1` (alpha).
 
 - **Website:** [brownout.pages.dev](https://brownout.pages.dev/)
 - **Main finding:** [In 89 of 322 correct answers, the agent never checked the evidence](https://brownout.pages.dev/blog/unconfirmed-passes-cloud-opsbench/)
@@ -32,11 +32,21 @@ graded again by a new verifier, offline and for free. A crashed scorer is record
 never as reward 0.
 
 ```powershell
-python -m unittest discover -s tests -p "*_test*.py"                                # offline tests
-python -m src.run cloudops-boutique --provider nebius --model <id> --concurrency 8   # paid
-python -m src.report runs --filter boutique                                         # free
-python -m src.envs.SystemEnv.cloudops.regrade_strict                                # free
+uv sync --locked                                       # exact versions from uv.lock (Python 3.12)
+uv run python scripts/test_offline.py                  # offline tests, network blocked
+uv run python -m src.envs.SystemEnv.cloudops.data fetch    # Cloud-OpsBench at the pinned commit
+uv run python -m src.envs.SystemEnv.cloudops.replay        # free: replay saved runs, no model
+uv run python -m src.envs.SystemEnv.cloudops.regrade_strict                         # free
+uv run python -m src.report runs --filter boutique                                  # free
+uv run python -m src.run cloudops-boutique --provider nebius --model <id> --concurrency 8   # paid
 ```
+
+Without uv: `pip install -r requirements.txt` (the same pins, exported from `uv.lock`).
+
+**Replayable.** Cloud-OpsBench tools answer from each case's recorded cluster data, so a saved
+run can be replayed with no model: every saved tool call goes back to the environment and must
+get the same answer, then the run is re-graded. On the pinned data commit (`ea05daf`), all
+1,095 saved runs replay exactly (tool outputs, final state and reward).
 
 ## Results on Cloud-OpsBench (Online Boutique)
 
@@ -82,6 +92,19 @@ How the strict check was tested:
   scheduling cases (hand-picked: a demonstration, not a rate).
 
 Not claimed: anything about other models or harnesses, human-verified labels, or training effects.
+
+## Limits
+
+- One benchmark with results (Cloud-OpsBench, Online Boutique). Train-Ticket and code-defect
+  cases are wired in but have no reported results.
+- The strict verifier is a measuring stick, not a training reward, and it has not been tried
+  as one.
+- RL results are one 40-step LoRA run on one 4B model with greedy evaluation: one seed, no
+  error bars across runs.
+- The Harbor / LiveCodeBench environment is in progress and not part of these results.
+- Paid runs have turn, token and time budgets but no dollar cap yet.
+- Developed on Windows; CI runs the offline tests on Linux. Nothing that needs a GPU, a cluster
+  or the Cloud-OpsBench data runs in CI (those tests skip).
 
 Write-up: [findings/cloudops-unconfirmed-passes/](findings/cloudops-unconfirmed-passes/README.md) ·
 Method: [Docs/STRICT_VERIFIER.md](Docs/STRICT_VERIFIER.md) ·

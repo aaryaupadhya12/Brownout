@@ -2,4 +2,5 @@
 # Enforces Docs/SHIPPING.md. Enable once with: git config core.hooksPath .githooks
 PY=python
 [ -x .venv312/Scripts/python.exe ] && PY=.venv312/Scripts/python.exe
+for p in .venv/Scripts/python.exe .venv/bin/python; do [ -x "$p" ] && PY=$p; done   # uv sync
 exec "$PY" scripts/ship_check.py

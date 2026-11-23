@@ -24,13 +24,18 @@ parts on every commit; the rest is checked in review.
 6. **Your machine, your keys.** Keys come from the environment, never from files in the repo.
    Nothing phones home. Saved runs are records and are never edited.
 
-## Every commit (enforced by `scripts/ship_check.py`)
+## Every commit (enforced by `scripts/ship_check.py`, locally and in CI)
 
-- Offline tests pass: `python -m unittest discover -s tests -p "*_test*.py"`.
+- Offline tests pass with the network blocked: `python scripts/test_offline.py`.
 - No run outputs or datasets are committed: `runs/`, `jobs/`, `lcb/`, `data/`.
 - No secrets in the diff (API keys, private keys, `.env` files) and no file over 5 MB.
 - A new Python file under `src/`, `cli/` or `train/` is under 100 lines, or its first lines
   contain `# over-100: <reason>`. Existing long files get a warning when changed.
+
+- CI (`.github/workflows/ci.yml`) runs `ship_check.py --all` on every push and pull request,
+  from `uv.lock`, with actions pinned by commit SHA and read-only permissions.
+- Dependencies change only through `pyproject.toml` + `uv lock`; then re-export
+  `requirements.txt` with `uv export --locked --no-hashes --format requirements-txt -o requirements.txt`.
 
 ## Every environment
 
@@ -38,6 +43,8 @@ parts on every commit; the rest is checked in review.
 - Oracle = 1 and nop = 0 recorded in the env's README, with the Harbor job folder name.
 - The reward reads only the task and the trace (see CLAUDE.md design rules).
 - One command reproduces a run, written in the README.
+- Its data is pinned to an exact commit, and saved runs replay on it with no model
+  (Cloud-OpsBench: `cloudops.data check`, then `cloudops.replay`; any difference blocks a release).
 
 ## Every release
 
@@ -50,6 +57,7 @@ parts on every commit; the rest is checked in review.
 ## Install the check
 
 ```bash
+uv sync --locked                      # the pinned environment (Python 3.12)
 git config core.hooksPath .githooks   # runs scripts/ship_check.py before every commit
-python scripts/ship_check.py          # run it by hand; --no-tests skips the test suite
+python scripts/ship_check.py          # by hand; --no-tests skips tests, --all checks every file
 ```

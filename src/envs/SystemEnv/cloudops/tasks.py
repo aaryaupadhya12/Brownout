@@ -31,8 +31,8 @@ def data_root() -> str:
     root = os.environ.get("CLOUDOPSBENCH_ROOT") or os.path.join(REPO_ROOT, "data", "Cloud-OpsBench")
     if not os.path.isdir(os.path.join(root, "benchmark")):
         raise FileNotFoundError(
-            f"Cloud-OpsBench not found at {root}: clone "
-            "https://github.com/LLM4Ops/Cloud-OpsBench and set CLOUDOPSBENCH_ROOT")
+            f"Cloud-OpsBench not found at {root}: run "
+            "`python -m src.envs.SystemEnv.cloudops.data fetch` or set CLOUDOPSBENCH_ROOT")
     return root
 
 

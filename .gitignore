@@ -446,3 +446,53 @@ data/
 # Harbor job outputs and downloaded task datasets (795 MB): never commit
 jobs/
 lcb/
+
+# ---- Brownout: keys, weights, traces and local tool state. Never commit. ----
+# keys and credentials (.env is caught by *.env above; .env.example stays tracked)
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials*.json
+*service-account*.json
+.netrc
+.modal.toml
+.claude/settings.local.json
+.claude/*.local.*
+
+# model weights and training checkpoints
+*.safetensors
+*.gguf
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+wandb/
+outputs/
+hf_cache/
+
+# traces and rollout dumps outside runs/ and jobs/ (saved records stay local)
+*.jsonl
+*.parquet
+trajectories/
+miles_data/
+
+# Python tool caches and builds
+.venv*/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+*.egg-info/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# local research notes and reports
+research_notes/
+reports/
